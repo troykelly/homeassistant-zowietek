@@ -1,0 +1,61 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Run Home Assistant",
+      "type": "shell",
+      "command": "scripts/develop",
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Run Tests",
+      "type": "shell",
+      "command": "pytest tests/ -v --no-cov",
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "Run Tests with Coverage",
+      "type": "shell",
+      "command": "pytest tests/ --cov=custom_components.zowietek --cov-report=term-missing --cov-report=html",
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "Lint: Ruff Check",
+      "type": "shell",
+      "command": "ruff check .",
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Lint: Ruff Fix",
+      "type": "shell",
+      "command": "ruff check --fix .",
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Format: Ruff Format",
+      "type": "shell",
+      "command": "ruff format .",
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Type Check: Mypy",
+      "type": "shell",
+      "command": "mypy custom_components/zowietek/",
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Install Dependencies",
+      "type": "shell",
+      "command": "scripts/setup",
+      "group": "build",
+      "problemMatcher": []
+    }
+  ]
+}

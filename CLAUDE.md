@@ -37,7 +37,7 @@ See skill: `ha-zowietek-github`
 
 ## Mandatory Development Rules
 
-### 0. Inclusive Language
+### 1. Inclusive Language
 
 **This project uses inclusive language. No exceptions.**
 
@@ -46,7 +46,18 @@ See skill: `ha-zowietek-github`
 - Use `primary`/`replica`, never `master`/`slave`
 - Use gender-neutral terms (`they`, `them`, `their`)
 
-### 1. Test-Driven Development (TDD)
+### 2. No Laziness
+
+**Never take shortcuts. Do the job properly.**
+
+- Never stub out code with `TODO` or `pass` and move on
+- Never skip tests because "it's simple"
+- Never leave incomplete implementations
+- Never use placeholders like `...` in actual code
+- If a task requires 10 steps, do all 10 steps
+- If you're tired of a task, that's when you focus harder
+
+### 3. Test-Driven Development (TDD)
 
 **Every line of code MUST start with a failing test.**
 
@@ -62,7 +73,7 @@ RED → GREEN → REFACTOR
 
 See skill: `ha-zowietek-tdd`
 
-### 2. No `Any` Type
+### 4. No `Any` Type
 
 **NEVER use `Any` in type annotations.**
 
@@ -74,7 +85,7 @@ See skill: `ha-zowietek-tdd`
 
 See skill: `ha-zowietek-typing`
 
-### 3. Two Failures = Research
+### 5. Two Failures = Research
 
 **If code fails twice, STOP and research.**
 

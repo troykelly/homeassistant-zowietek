@@ -30,6 +30,7 @@ This is a **VIOLATION**. Every commit, every PR, every change must reference an 
 |------|-------|
 | Repository | troykelly/homeassistant-zowietek |
 | URL | https://github.com/troykelly/homeassistant-zowietek |
+| Project Board | https://github.com/users/troykelly/projects/4 |
 
 ## Label Reference
 

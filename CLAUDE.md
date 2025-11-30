@@ -15,6 +15,7 @@ This is a custom Home Assistant integration that provides control and monitoring
 | Item | Value |
 |------|-------|
 | Repository | troykelly/homeassistant-zowietek |
+| Project Board | https://github.com/users/troykelly/projects/4 |
 
 ### The Iron Law
 

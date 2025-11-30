@@ -37,6 +37,15 @@ See skill: `ha-zowietek-github`
 
 ## Mandatory Development Rules
 
+### 0. Inclusive Language
+
+**This project uses inclusive language. No exceptions.**
+
+- Default branch is `main`, never `master`
+- Use `allowlist`/`denylist`, never `whitelist`/`blacklist`
+- Use `primary`/`replica`, never `master`/`slave`
+- Use gender-neutral terms (`they`, `them`, `their`)
+
 ### 1. Test-Driven Development (TDD)
 
 **Every line of code MUST start with a failing test.**

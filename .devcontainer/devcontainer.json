@@ -101,7 +101,6 @@
   ],
   "remoteUser": "vscode",
   "mounts": [
-    "source=${localWorkspaceFolder}/config,target=/workspaces/config,type=bind,consistency=cached",
     "source=ha-zowietek-vscode-home,target=/home/vscode,type=volume"
   ]
 }

@@ -3,7 +3,6 @@
 
 # HA dev config directory (contains credentials, tokens, etc.)
 config/
-!config/.gitkeep
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

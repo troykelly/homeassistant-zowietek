@@ -465,6 +465,14 @@ def mock_video_info() -> ZowietekVideoInfo:
     }
 ```
 
+## API Research Resources
+
+When you need to discover additional API endpoints or understand device behavior:
+
+- **[Bitfocus Companion Module for Zowietek](https://github.com/bitfocus/companion-module-zowietek-api)** - Excellent reference implementation that documents many ZowieBox API endpoints, actions, and feedbacks. Covers PTZ control, encoding parameters, recording, tally, and more.
+- **Device Web Interface** - Access the ZowieBox web UI to observe API calls in browser DevTools
+- **Live Device Testing** - Use curl against test devices (see `.env` for URLs)
+
 ## The Bottom Line
 
 **Map ZowieBox capabilities to HA entities correctly.**
@@ -475,3 +483,4 @@ def mock_video_info() -> ZowietekVideoInfo:
 - Sensors for monitoring state
 - Follow device modes (encoder/decoder)
 - Test with live devices when possible
+- Reference the Companion module for API hints

@@ -325,3 +325,4 @@ The ZowieBox supports various operating modes:
 - [Home Assistant Developer Docs](https://developers.home-assistant.io/)
 - [Config Flow Docs](https://developers.home-assistant.io/docs/config_entries_config_flow_handler/)
 - [Zowietek Product Page](https://zowietek.com/product/4k-video-streaming-encoder-decoder/)
+- [Bitfocus Companion Module for Zowietek](https://github.com/bitfocus/companion-module-zowietek-api) - Excellent reference for ZowieBox API endpoints, actions, and capabilities

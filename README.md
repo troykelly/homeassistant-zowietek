@@ -112,6 +112,12 @@ Content-Type: application/json
 | `00003` | Invalid parameters |
 | `80003` | Not logged in |
 
+## Acknowledgments
+
+This integration was developed with the help of several resources:
+
+- **[Bitfocus Companion Module for Zowietek](https://github.com/bitfocus/companion-module-zowietek-api)** - An invaluable resource for understanding the ZowieBox API. This Companion module provided crucial insights into the device's HTTP API structure, available endpoints, and control capabilities. If you're building automation for ZowieBox devices, this repository is an excellent reference.
+
 ## Contributing
 
 Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTING.md) before submitting a pull request.

@@ -51,6 +51,7 @@ Write down explicitly:
 **ZowieBox API (reverse-engineered):**
 - See CLAUDE.md for API reference
 - Test endpoints directly with curl
+- **[Bitfocus Companion Module](https://github.com/bitfocus/companion-module-zowietek-api)** - Reference implementation with extensive API documentation
 
 ### Step 3: Test ZowieBox API Directly
 

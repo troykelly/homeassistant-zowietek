@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Home Assistant Community
+    url: https://community.home-assistant.io/
+    about: "For general Home Assistant questions and discussions"
+  - name: Zowietek Product Page
+    url: https://zowietek.com/product/4k-video-streaming-encoder-decoder/
+    about: "For ZowieBox product information and specifications"
+  - name: Documentation
+    url: https://github.com/troykelly/homeassistant-zowietek#readme
+    about: "Read the documentation before opening an issue"
+  - name: Discussions
+    url: https://github.com/troykelly/homeassistant-zowietek/discussions
+    about: "Ask questions, share ideas, or discuss the integration"

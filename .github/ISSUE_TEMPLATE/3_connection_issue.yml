@@ -1,0 +1,182 @@
+name: "Connection / Setup Issue"
+description: "Report problems connecting to your ZowieBox device or setting up the integration"
+labels: ["connection", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Connection & Setup Issues
+
+        Use this template if you're having trouble:
+        - Connecting Home Assistant to your ZowieBox device
+        - Initial setup/configuration of the integration
+        - Authentication problems
+        - Network connectivity issues between HA and ZowieBox
+
+        **Before submitting:**
+        - Verify your ZowieBox device is accessible on your network
+        - Check that you can access the ZowieBox web interface
+        - Test connectivity: `curl -X POST "http://YOUR_ZOWIEBOX_IP/system?option=getinfo" -H "Content-Type: application/json" -d '{"group":"all","user":"admin","psw":"admin"}'`
+        - Review the [setup documentation](https://github.com/troykelly/homeassistant-zowietek#readme)
+
+        ---
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: "Pre-submission Checklist"
+      options:
+        - label: "I have verified my ZowieBox device is running and accessible"
+          required: true
+        - label: "I have tested that I can access the ZowieBox web interface"
+          required: true
+        - label: "I have searched existing issues for similar problems"
+          required: true
+
+  - type: dropdown
+    id: issue_type
+    attributes:
+      label: "Type of Connection Issue"
+      description: "What kind of connection problem are you experiencing?"
+      options:
+        - "Cannot add integration (setup fails)"
+        - "Integration added but shows unavailable"
+        - "Intermittent disconnections"
+        - "Authentication rejected"
+        - "Timeout errors"
+        - "Entities not appearing"
+        - "Other connection problem"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: "Describe the Problem"
+      description: "What happens when you try to connect?"
+      placeholder: "When I try to add the integration, it shows... / The integration was working but now..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: error_message
+    attributes:
+      label: "Error Message"
+      description: "What error message do you see (if any)?"
+      placeholder: "Copy the exact error message shown in Home Assistant..."
+      render: text
+    validations:
+      required: true
+
+  - type: input
+    id: zowiebox_ip
+    attributes:
+      label: "ZowieBox IP/Hostname Format"
+      description: "What address are you using? (Replace actual IP with example)"
+      placeholder: "http://192.168.1.x or http://zowiebox.local"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: network_type
+    attributes:
+      label: "Network Configuration"
+      description: "How are Home Assistant and ZowieBox connected?"
+      options:
+        - "Same local network (LAN)"
+        - "Different networks/VLANs"
+        - "Through reverse proxy"
+        - "Docker network"
+        - "Other / Complex setup"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: integration_version
+    attributes:
+      label: "Integration Version"
+      description: "Which version of the Zowietek integration?"
+      options:
+        - "0.1.0"
+        - "Not listed (specify below)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: ha_version
+    attributes:
+      label: "Home Assistant Version"
+      options:
+        - "2025.11.x"
+        - "2025.10.x"
+        - "2025.9.x"
+        - "2025.8.x"
+        - "2025.7.x or older"
+        - "Not listed (specify below)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: ha_installation
+    attributes:
+      label: "Home Assistant Installation Type"
+      options:
+        - "Home Assistant OS"
+        - "Home Assistant Container (Docker)"
+        - "Home Assistant Supervised"
+        - "Home Assistant Core"
+        - "Other / Unknown"
+    validations:
+      required: true
+
+  - type: input
+    id: zowiebox_firmware
+    attributes:
+      label: "ZowieBox Firmware Version"
+      description: "What firmware version is your ZowieBox running?"
+      placeholder: "e.g., 1.0.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: network_test
+    attributes:
+      label: "Network Connectivity Test"
+      description: |
+        Please run this test from your Home Assistant host and paste the results:
+
+        **For Home Assistant OS/Supervised:**
+        Use the Terminal & SSH add-on or Advanced SSH add-on
+
+        **Test - Can you reach the ZowieBox API?**
+        ```bash
+        curl -X POST "http://YOUR_ZOWIEBOX_IP/system?option=getinfo" \
+          -H "Content-Type: application/json" \
+          -d '{"group":"all","user":"admin","psw":"admin"}'
+        ```
+      placeholder: "Paste the output of the network test here (remove your actual credentials if different from default)..."
+      render: text
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: "Debug Logs"
+      description: |
+        Please provide debug logs. Add this to `configuration.yaml` and restart:
+        ```yaml
+        logger:
+          logs:
+            custom_components.zowietek: debug
+        ```
+        Then attempt the connection and check Settings > System > Logs
+      placeholder: "Paste relevant log entries here..."
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: "Additional Context"
+      description: "Any other information that might help diagnose the issue"
+      placeholder: "Network diagram, firewall rules, recent changes, etc."

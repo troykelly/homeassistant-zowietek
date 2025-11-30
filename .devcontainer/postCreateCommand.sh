@@ -9,13 +9,15 @@ echo "=== Home Assistant Zowietek Integration - Dev Container Setup ==="
 # Activate the Home Assistant virtual environment
 export PATH="/home/vscode/.local/ha-venv/bin:$PATH"
 
-# Create config directory if it doesn't exist
-mkdir -p /workspaces/config/custom_components
+# Create config directory if it doesn't exist (within the repository, gitignored)
+WORKSPACE_DIR="/workspaces/homeassistant-zowietek"
+CONFIG_DIR="${WORKSPACE_DIR}/config"
+mkdir -p "${CONFIG_DIR}/custom_components"
 
 # Link the custom component for development
-if [ -d "/workspaces/homeassistant-zowietek/custom_components" ]; then
+if [ -d "${WORKSPACE_DIR}/custom_components" ]; then
     echo "Linking custom_components to Home Assistant config..."
-    ln -sf /workspaces/homeassistant-zowietek/custom_components/* /workspaces/config/custom_components/ 2>/dev/null || true
+    ln -sf "${WORKSPACE_DIR}/custom_components"/* "${CONFIG_DIR}/custom_components/" 2>/dev/null || true
 fi
 
 # Install project dependencies if pyproject.toml or requirements exist
@@ -49,9 +51,9 @@ if [ -f ".pre-commit-config.yaml" ]; then
 fi
 
 # Create basic Home Assistant configuration if it doesn't exist
-if [ ! -f "/workspaces/config/configuration.yaml" ]; then
+if [ ! -f "${CONFIG_DIR}/configuration.yaml" ]; then
     echo "Creating default Home Assistant configuration..."
-    cat > /workspaces/config/configuration.yaml << 'EOF'
+    cat > "${CONFIG_DIR}/configuration.yaml" << 'EOF'
 # Home Assistant Development Configuration
 # This configuration is for testing custom integrations
 

@@ -45,8 +45,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Create Home Assistant configuration directory
-RUN mkdir -p /workspaces/config/custom_components
+# Note: Config directory is created at /workspaces/homeassistant-zowietek/config (gitignored)
+# by postCreateCommand.sh - no need to create here as it's within the mounted workspace
 
 # Switch to vscode user for remaining setup
 USER vscode
@@ -73,8 +73,8 @@ RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master
 # Add useful aliases and PATH configuration
 RUN echo '\n# Home Assistant Development\n\
 export PATH="${HA_VENV}/bin:$PATH"\n\
-alias ha="hass -c /workspaces/config"\n\
-alias halog="tail -f /workspaces/config/home-assistant.log"\n\
+alias ha="hass -c /workspaces/homeassistant-zowietek/config"\n\
+alias halog="tail -f /workspaces/homeassistant-zowietek/config/home-assistant.log"\n\
 alias pytest="python -m pytest"\n\
 alias ruff-check="ruff check ."\n\
 alias ruff-fix="ruff check --fix ."\n\
@@ -85,8 +85,8 @@ export UV_LINK_MODE=copy\n\
 # Add to bashrc as fallback
 RUN echo '\n# Home Assistant Development\n\
 export PATH="${HA_VENV}/bin:$PATH"\n\
-alias ha="hass -c /workspaces/config"\n\
-alias halog="tail -f /workspaces/config/home-assistant.log"\n\
+alias ha="hass -c /workspaces/homeassistant-zowietek/config"\n\
+alias halog="tail -f /workspaces/homeassistant-zowietek/config/home-assistant.log"\n\
 alias pytest="python -m pytest"\n\
 export UV_LINK_MODE=copy\n\
 ' >> /home/vscode/.bashrc

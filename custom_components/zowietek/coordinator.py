@@ -90,22 +90,58 @@ class ZowietekCoordinator(DataUpdateCoordinator[ZowietekData]):
         # Fallback to config entry title
         return self.config_entry.title
 
+    async def _async_fetch_optional(
+        self,
+        name: str,
+        coro: object,
+    ) -> dict[str, str | int]:
+        """Fetch optional data that may not be available on all devices.
+
+        Some API endpoints are not supported by all firmware versions.
+        This method handles failures gracefully by returning an empty dict.
+
+        Args:
+            name: Name of the endpoint for logging.
+            coro: The coroutine to execute.
+
+        Returns:
+            The API response data, or empty dict if the endpoint fails.
+        """
+        try:
+            result = await coro  # type: ignore[misc]
+            if isinstance(result, dict):
+                return result
+            return {}
+        except ZowietekAuthError:
+            # Re-raise auth errors - these should not be ignored
+            raise
+        except ZowietekError as err:
+            # Log but don't fail - endpoint may not be supported
+            _LOGGER.debug(
+                "Optional endpoint %s not available: %s",
+                name,
+                err,
+            )
+            return {}
+
     async def _async_update_data(self) -> ZowietekData:
         """Fetch data from ZowieBox device.
 
-        This method fetches all data types in parallel for better performance.
-        It handles authentication errors by raising ConfigEntryAuthFailed,
-        and other errors by raising UpdateFailed.
+        This method fetches data types in parallel for better performance.
+        Required endpoints (video info, input/output) will cause UpdateFailed
+        if they fail. Optional endpoints (device info, NDI) will gracefully
+        degrade to empty data.
 
         Returns:
             ZowietekData containing all device information.
 
         Raises:
             ConfigEntryAuthFailed: If authentication fails.
-            UpdateFailed: If the connection fails or API returns an error.
+            UpdateFailed: If required endpoints fail.
         """
         try:
-            # Fetch all data types in parallel for better performance
+            # Fetch required data (these must succeed)
+            # Fetch optional data (may not be supported on all firmware)
             (
                 device_info,
                 video_info,
@@ -114,12 +150,18 @@ class ZowietekCoordinator(DataUpdateCoordinator[ZowietekData]):
                 stream_publish,
                 ndi_config,
             ) = await asyncio.gather(
-                self.client.async_get_device_info(),
+                self._async_fetch_optional(
+                    "device_info",
+                    self.client.async_get_device_info(),
+                ),
                 self.client.async_get_video_info(),
                 self.client.async_get_input_signal(),
                 self.client.async_get_output_info(),
                 self.client.async_get_stream_publish_info(),
-                self.client.async_get_ndi_config(),
+                self._async_fetch_optional(
+                    "ndi_config",
+                    self.client.async_get_ndi_config(),
+                ),
             )
 
             # Combine video info with input signal and output info

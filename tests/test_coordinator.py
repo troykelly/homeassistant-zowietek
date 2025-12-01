@@ -283,9 +283,13 @@ class TestZowietekCoordinatorErrors:
         mock_config_entry: MockConfigEntry,
         mock_zowietek_client: MagicMock,
     ) -> None:
-        """Test authentication error triggers ConfigEntryAuthFailed."""
+        """Test authentication error triggers ConfigEntryAuthFailed.
+
+        Auth errors should always be raised, even from optional endpoints.
+        """
         mock_config_entry.add_to_hass(hass)
 
+        # Auth error on optional endpoint should still raise ConfigEntryAuthFailed
         mock_zowietek_client.async_get_device_info.side_effect = ZowietekAuthError(
             "Authentication failed"
         )
@@ -295,16 +299,67 @@ class TestZowietekCoordinatorErrors:
         with pytest.raises(ConfigEntryAuthFailed):
             await _refresh_coordinator(coordinator)
 
+    async def test_optional_endpoint_failure_does_not_raise(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test optional endpoint failures are handled gracefully.
+
+        Device info and NDI config are optional endpoints that may not be
+        supported on all firmware versions. Failures should not cause
+        the coordinator to fail.
+        """
+        mock_config_entry.add_to_hass(hass)
+
+        # Both optional endpoints fail
+        mock_zowietek_client.async_get_device_info.side_effect = ZowietekApiError(
+            "param group not support"
+        )
+        mock_zowietek_client.async_get_ndi_config.side_effect = ZowietekApiError(
+            "Endpoint not found"
+        )
+
+        coordinator = ZowietekCoordinator(hass, mock_config_entry)
+        await _refresh_coordinator(coordinator)
+
+        # Should still succeed with empty system/ndi data
+        assert isinstance(coordinator.data, ZowietekData)
+        assert coordinator.data.system == {}  # Optional endpoint failed
+        assert "ndi_enable" not in coordinator.data.stream  # NDI not available
+
+    async def test_optional_endpoint_non_dict_returns_empty(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test optional endpoint returning non-dict is handled gracefully."""
+        mock_config_entry.add_to_hass(hass)
+
+        # Optional endpoint returns non-dict (e.g., None or list)
+        mock_zowietek_client.async_get_device_info.return_value = None
+        mock_zowietek_client.async_get_ndi_config.return_value = ["not", "a", "dict"]
+
+        coordinator = ZowietekCoordinator(hass, mock_config_entry)
+        await _refresh_coordinator(coordinator)
+
+        # Should succeed with empty data for non-dict responses
+        assert isinstance(coordinator.data, ZowietekData)
+        assert coordinator.data.system == {}
+
     async def test_connection_error_raises_update_failed(
         self,
         hass: HomeAssistant,
         mock_config_entry: MockConfigEntry,
         mock_zowietek_client: MagicMock,
     ) -> None:
-        """Test connection error raises UpdateFailed."""
+        """Test connection error on required endpoint raises UpdateFailed."""
         mock_config_entry.add_to_hass(hass)
 
-        mock_zowietek_client.async_get_device_info.side_effect = ZowietekConnectionError(
+        # Video info is required - connection error should raise UpdateFailed
+        mock_zowietek_client.async_get_video_info.side_effect = ZowietekConnectionError(
             "Connection failed"
         )
 
@@ -319,10 +374,11 @@ class TestZowietekCoordinatorErrors:
         mock_config_entry: MockConfigEntry,
         mock_zowietek_client: MagicMock,
     ) -> None:
-        """Test API error raises UpdateFailed."""
+        """Test API error on required endpoint raises UpdateFailed."""
         mock_config_entry.add_to_hass(hass)
 
-        mock_zowietek_client.async_get_device_info.side_effect = ZowietekApiError("API error")
+        # Input signal is required - API error should raise UpdateFailed
+        mock_zowietek_client.async_get_input_signal.side_effect = ZowietekApiError("API error")
 
         coordinator = ZowietekCoordinator(hass, mock_config_entry)
 
@@ -369,8 +425,8 @@ class TestZowietekCoordinatorRecovery:
         """Test coordinator recovers after connection is restored."""
         mock_config_entry.add_to_hass(hass)
 
-        # First call fails
-        mock_zowietek_client.async_get_device_info.side_effect = ZowietekConnectionError(
+        # First call fails on required endpoint (video_info)
+        mock_zowietek_client.async_get_video_info.side_effect = ZowietekConnectionError(
             "Connection failed"
         )
 
@@ -380,7 +436,7 @@ class TestZowietekCoordinatorRecovery:
             await _refresh_coordinator(coordinator)
 
         # Restore connection
-        mock_zowietek_client.async_get_device_info.side_effect = None
+        mock_zowietek_client.async_get_video_info.side_effect = None
         mock_zowietek_client.async_get_device_info.return_value = mock_device_info
         mock_zowietek_client.async_get_video_info.return_value = mock_video_info
         mock_zowietek_client.async_get_input_signal.return_value = mock_input_signal

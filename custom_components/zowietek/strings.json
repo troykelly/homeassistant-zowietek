@@ -22,5 +22,33 @@
     "abort": {
       "already_configured": "Device is already configured"
     }
+  },
+  "entity": {
+    "sensor": {
+      "video_resolution": {
+        "name": "Video resolution"
+      },
+      "frame_rate": {
+        "name": "Frame rate"
+      },
+      "stream_bitrate": {
+        "name": "Stream bitrate"
+      },
+      "encoder_type": {
+        "name": "Encoder type"
+      },
+      "ndi_name": {
+        "name": "NDI name"
+      },
+      "firmware_version": {
+        "name": "Firmware version"
+      },
+      "uptime": {
+        "name": "Uptime"
+      },
+      "device_mode": {
+        "name": "Device mode"
+      }
+    }
   }
 }

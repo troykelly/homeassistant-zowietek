@@ -152,6 +152,9 @@ class ZowietekBinarySensor(ZowietekEntity, BinarySensorEntity):
     def _has_video_input(self) -> bool:
         """Check if video input signal is detected.
 
+        Supports both 'signal' and 'hdmi_signal' keys as different firmware
+        versions may use different key names.
+
         Returns:
             True if video input signal is detected.
         """
@@ -161,7 +164,12 @@ class ZowietekBinarySensor(ZowietekEntity, BinarySensorEntity):
         if not isinstance(input_data, dict):
             return False
 
+        # Try 'signal' first, then fall back to 'hdmi_signal' for compatibility
+        # with different firmware versions
         signal = input_data.get("signal")
+        if signal is None:
+            signal = input_data.get("hdmi_signal")
+
         if signal is None:
             return False
 

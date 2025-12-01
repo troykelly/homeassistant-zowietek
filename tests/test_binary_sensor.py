@@ -341,6 +341,56 @@ class TestZowietekBinarySensorValues:
         # signal=1 means input detected
         assert binary_sensor.is_on is True
 
+    async def test_video_input_is_on_when_hdmi_signal_detected(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test video input binary sensor works with hdmi_signal key from live devices."""
+        # Live device uses hdmi_signal instead of signal
+        mock_zowietek_client.async_get_input_signal.return_value = {
+            "hdmi_signal": 1,
+            "audio_signal": 0,
+            "width": 1920,
+            "height": 1080,
+            "framerate": 60,
+        }
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        descriptions = {desc.key: desc for desc in BINARY_SENSOR_DESCRIPTIONS}
+
+        binary_sensor = ZowietekBinarySensor(coordinator, descriptions["video_input"])
+
+        # hdmi_signal=1 means input detected
+        assert binary_sensor.is_on is True
+
+    async def test_video_input_is_off_when_hdmi_signal_is_zero(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test video input binary sensor is off when hdmi_signal is 0."""
+        mock_zowietek_client.async_get_input_signal.return_value = {
+            "hdmi_signal": 0,
+            "audio_signal": 0,
+            "width": 0,
+            "height": 0,
+            "framerate": 0,
+        }
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        descriptions = {desc.key: desc for desc in BINARY_SENSOR_DESCRIPTIONS}
+
+        binary_sensor = ZowietekBinarySensor(coordinator, descriptions["video_input"])
+
+        assert binary_sensor.is_on is False
+
     async def test_video_input_is_off_when_no_signal(
         self,
         hass: HomeAssistant,

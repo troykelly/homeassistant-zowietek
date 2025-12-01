@@ -8,7 +8,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceInfo
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.zowietek.const import DOMAIN
@@ -214,21 +213,29 @@ class TestZowietekEntityInit:
 class TestZowietekEntityDeviceInfo:
     """Tests for ZowietekEntity device_info property."""
 
-    async def test_device_info_returns_device_info_type(
+    async def test_device_info_returns_dict(
         self,
         hass: HomeAssistant,
         mock_config_entry: MockConfigEntry,
         mock_zowietek_client: MagicMock,
     ) -> None:
-        """Test device_info returns DeviceInfo type."""
+        """Test device_info returns a dict with required keys.
+
+        DeviceInfo is a TypedDict so we verify it's a dict with expected keys.
+        """
         mock_config_entry.add_to_hass(hass)
 
         coordinator = ZowietekCoordinator(hass, mock_config_entry)
         await _refresh_coordinator(coordinator)
 
         entity = ZowietekEntity(coordinator, "test_sensor")
+        device_info = entity.device_info
 
-        assert isinstance(entity.device_info, DeviceInfo)
+        # DeviceInfo is a TypedDict, so verify it's a dict with expected keys
+        assert isinstance(device_info, dict)
+        assert "identifiers" in device_info
+        assert "manufacturer" in device_info
+        assert "name" in device_info
 
     async def test_device_info_identifiers(
         self,

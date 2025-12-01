@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -9,14 +10,18 @@ from homeassistant.components.switch import (
     SwitchEntity,
     SwitchEntityDescription,
 )
+from homeassistant.exceptions import HomeAssistantError
 
 from . import ZowietekConfigEntry
 from .coordinator import ZowietekCoordinator
 from .entity import ZowietekEntity
+from .exceptions import ZowietekApiError
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -134,13 +139,20 @@ class ZowietekSwitch(ZowietekEntity, SwitchEntity):
 
         Args:
             kwargs: Additional arguments (required by HA interface).
+
+        Raises:
+            HomeAssistantError: If the stream cannot be enabled.
         """
         stream_type = self.entity_description.stream_type
 
-        if stream_type == "ndi":
-            await self.coordinator.client.async_set_ndi_enabled(True)
-        else:
-            await self.coordinator.client.async_set_stream_enabled(stream_type, True)
+        try:
+            if stream_type == "ndi":
+                await self.coordinator.client.async_set_ndi_enabled(True)
+            else:
+                await self.coordinator.client.async_set_stream_enabled(stream_type, True)
+        except ZowietekApiError as err:
+            _LOGGER.error("Failed to enable %s stream: %s", stream_type, err)
+            raise HomeAssistantError(f"Failed to enable {stream_type} stream: {err}") from err
 
         await self.coordinator.async_request_refresh()
 
@@ -152,13 +164,20 @@ class ZowietekSwitch(ZowietekEntity, SwitchEntity):
 
         Args:
             kwargs: Additional arguments (required by HA interface).
+
+        Raises:
+            HomeAssistantError: If the stream cannot be disabled.
         """
         stream_type = self.entity_description.stream_type
 
-        if stream_type == "ndi":
-            await self.coordinator.client.async_set_ndi_enabled(False)
-        else:
-            await self.coordinator.client.async_set_stream_enabled(stream_type, False)
+        try:
+            if stream_type == "ndi":
+                await self.coordinator.client.async_set_ndi_enabled(False)
+            else:
+                await self.coordinator.client.async_set_stream_enabled(stream_type, False)
+        except ZowietekApiError as err:
+            _LOGGER.error("Failed to disable %s stream: %s", stream_type, err)
+            raise HomeAssistantError(f"Failed to disable {stream_type} stream: {err}") from err
 
         await self.coordinator.async_request_refresh()
 

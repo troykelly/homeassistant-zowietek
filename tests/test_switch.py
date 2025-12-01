@@ -1022,3 +1022,67 @@ class TestSwitchEdgeCases:
         switch = ZowietekSwitch(coordinator, descriptions["rtmp_stream"])
 
         assert switch.is_on is False
+
+    async def test_turn_on_api_error_raises_ha_error(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test turn_on raises HomeAssistantError when API fails."""
+        from homeassistant.exceptions import HomeAssistantError
+
+        from custom_components.zowietek.exceptions import ZowietekApiError
+        from custom_components.zowietek.switch import (
+            SWITCH_DESCRIPTIONS,
+            ZowietekSwitch,
+        )
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        descriptions = {desc.key: desc for desc in SWITCH_DESCRIPTIONS}
+
+        # Make API call raise an error
+        mock_zowietek_client.async_set_stream_enabled.side_effect = ZowietekApiError(
+            "Stream not found", "00000"
+        )
+
+        switch = ZowietekSwitch(coordinator, descriptions["rtmp_stream"])
+
+        with pytest.raises(HomeAssistantError) as exc_info:
+            await switch.async_turn_on()
+
+        assert "Failed to enable rtmp stream" in str(exc_info.value)
+
+    async def test_turn_off_api_error_raises_ha_error(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test turn_off raises HomeAssistantError when API fails."""
+        from homeassistant.exceptions import HomeAssistantError
+
+        from custom_components.zowietek.exceptions import ZowietekApiError
+        from custom_components.zowietek.switch import (
+            SWITCH_DESCRIPTIONS,
+            ZowietekSwitch,
+        )
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        descriptions = {desc.key: desc for desc in SWITCH_DESCRIPTIONS}
+
+        # Make API call raise an error
+        mock_zowietek_client.async_set_stream_enabled.side_effect = ZowietekApiError(
+            "Device not responding", "00000"
+        )
+
+        switch = ZowietekSwitch(coordinator, descriptions["srt_stream"])
+
+        with pytest.raises(HomeAssistantError) as exc_info:
+            await switch.async_turn_off()
+
+        assert "Failed to disable srt stream" in str(exc_info.value)

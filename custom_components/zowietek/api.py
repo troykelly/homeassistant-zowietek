@@ -422,7 +422,9 @@ class ZowietekClient:
         stream_type: str,
         enabled: bool,
     ) -> None:
-        """Enable or disable a stream publishing destination.
+        """Enable or disable a stream publishing destination by type.
+
+        Finds the stream with matching type in the publish list and toggles it.
 
         Args:
             stream_type: The stream type ('rtmp' or 'srt').
@@ -430,15 +432,34 @@ class ZowietekClient:
 
         Raises:
             ZowietekAuthError: If authentication fails.
-            ZowietekApiError: If the stream type is invalid.
+            ZowietekApiError: If the stream type is not found.
         """
+        # Get current publish list to find index by type
+        stream_info = await self.async_get_stream_publish_info()
+        publish_list = stream_info.get("publish", [])
+
+        # Find the index for the given stream type
+        stream_index: int | None = None
+        for entry in publish_list:
+            if isinstance(entry, dict) and entry.get("type") == stream_type:
+                index = entry.get("index")
+                if index is not None:
+                    stream_index = int(index)
+                    break
+
+        if stream_index is None:
+            # Stream type not found in publish list - may not be configured
+            raise ZowietekApiError(
+                f"Stream type '{stream_type}' not found in publish list",
+                "00000",
+            )
+
         await self._request(
             "/stream?option=setinfo",
             {
                 "group": "publish",
-                "opt": "set_enable",
-                "type": stream_type,
-                "enable": 1 if enabled else 0,
+                "opt": "update_publish_switch",
+                "data": {"index": stream_index, "switch": 1 if enabled else 0},
             },
             requires_auth=True,
         )

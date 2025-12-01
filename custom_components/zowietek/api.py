@@ -145,8 +145,7 @@ class ZowietekClient:
 
         try:
             timeout = aiohttp.ClientTimeout(total=self._timeout)
-            response = await session.post(url, json=data, timeout=timeout)
-            return response
+            return await session.post(url, json=data, timeout=timeout)
         except TimeoutError as err:
             raise ZowietekTimeoutError(
                 f"Request to {url} timed out after {self._timeout} seconds"
@@ -205,19 +204,12 @@ class ZowietekClient:
             ZowietekConnectionError: If the connection fails.
             ZowietekTimeoutError: If the request times out.
         """
-        try:
-            response = await self._request(
-                "/system?option=setinfo&login_check_flag=1",
-                {"group": "user"},
-            )
-            await self._handle_response(response)
-            return True
-        except aiohttp.ClientConnectionError as err:
-            raise ZowietekConnectionError(f"Unable to connect to {self._host}: {err}") from err
-        except TimeoutError as err:
-            raise ZowietekTimeoutError(
-                f"Login request timed out after {self._timeout} seconds"
-            ) from err
+        response = await self._request(
+            "/system?option=setinfo&login_check_flag=1",
+            {"group": "user"},
+        )
+        await self._handle_response(response)
+        return True
 
     async def async_get_system_info(self) -> ZowietekSystemInfo:
         """Get system information from the device.
@@ -231,18 +223,12 @@ class ZowietekClient:
             ZowietekConnectionError: If the connection fails.
             ZowietekTimeoutError: If the request times out.
         """
-        try:
-            response = await self._request(
-                "/system?option=getinfo",
-                {"group": "all"},
-            )
-            data = await self._handle_response(response)
-            # Cast to ZowietekSystemInfo - the data structure matches the TypedDict
-            return data  # type: ignore[return-value]
-        except aiohttp.ClientConnectionError as err:
-            raise ZowietekConnectionError(f"Unable to connect to {self._host}: {err}") from err
-        except TimeoutError as err:
-            raise ZowietekTimeoutError(f"Request timed out after {self._timeout} seconds") from err
+        response = await self._request(
+            "/system?option=getinfo",
+            {"group": "all"},
+        )
+        data = await self._handle_response(response)
+        return data  # type: ignore[return-value]
 
     async def async_get_video_info(self) -> ZowietekVideoInfo:
         """Get video information from the device.
@@ -256,17 +242,12 @@ class ZowietekClient:
             ZowietekConnectionError: If the connection fails.
             ZowietekTimeoutError: If the request times out.
         """
-        try:
-            response = await self._request(
-                "/video?option=getinfo",
-                {"group": "all"},
-            )
-            data = await self._handle_response(response)
-            return data  # type: ignore[return-value]
-        except aiohttp.ClientConnectionError as err:
-            raise ZowietekConnectionError(f"Unable to connect to {self._host}: {err}") from err
-        except TimeoutError as err:
-            raise ZowietekTimeoutError(f"Request timed out after {self._timeout} seconds") from err
+        response = await self._request(
+            "/video?option=getinfo",
+            {"group": "all"},
+        )
+        data = await self._handle_response(response)
+        return data  # type: ignore[return-value]
 
     async def async_get_audio_info(self) -> ZowietekAudioInfo:
         """Get audio information from the device.
@@ -280,17 +261,12 @@ class ZowietekClient:
             ZowietekConnectionError: If the connection fails.
             ZowietekTimeoutError: If the request times out.
         """
-        try:
-            response = await self._request(
-                "/audio?option=getinfo",
-                {"group": "all"},
-            )
-            data = await self._handle_response(response)
-            return data  # type: ignore[return-value]
-        except aiohttp.ClientConnectionError as err:
-            raise ZowietekConnectionError(f"Unable to connect to {self._host}: {err}") from err
-        except TimeoutError as err:
-            raise ZowietekTimeoutError(f"Request timed out after {self._timeout} seconds") from err
+        response = await self._request(
+            "/audio?option=getinfo",
+            {"group": "all"},
+        )
+        data = await self._handle_response(response)
+        return data  # type: ignore[return-value]
 
     async def async_get_stream_info(self) -> ZowietekStreamInfo:
         """Get stream information from the device.
@@ -304,17 +280,12 @@ class ZowietekClient:
             ZowietekConnectionError: If the connection fails.
             ZowietekTimeoutError: If the request times out.
         """
-        try:
-            response = await self._request(
-                "/stream?option=getinfo",
-                {"group": "all"},
-            )
-            data = await self._handle_response(response)
-            return data  # type: ignore[return-value]
-        except aiohttp.ClientConnectionError as err:
-            raise ZowietekConnectionError(f"Unable to connect to {self._host}: {err}") from err
-        except TimeoutError as err:
-            raise ZowietekTimeoutError(f"Request timed out after {self._timeout} seconds") from err
+        response = await self._request(
+            "/stream?option=getinfo",
+            {"group": "all"},
+        )
+        data = await self._handle_response(response)
+        return data  # type: ignore[return-value]
 
     async def async_get_network_info(self) -> ZowietekNetworkInfo:
         """Get network information from the device.
@@ -328,17 +299,12 @@ class ZowietekClient:
             ZowietekConnectionError: If the connection fails.
             ZowietekTimeoutError: If the request times out.
         """
-        try:
-            response = await self._request(
-                "/network?option=getinfo",
-                {"group": "all"},
-            )
-            data = await self._handle_response(response)
-            return data  # type: ignore[return-value]
-        except aiohttp.ClientConnectionError as err:
-            raise ZowietekConnectionError(f"Unable to connect to {self._host}: {err}") from err
-        except TimeoutError as err:
-            raise ZowietekTimeoutError(f"Request timed out after {self._timeout} seconds") from err
+        response = await self._request(
+            "/network?option=getinfo",
+            {"group": "all"},
+        )
+        data = await self._handle_response(response)
+        return data  # type: ignore[return-value]
 
     async def async_set_ndi_enabled(self, enabled: bool) -> None:
         """Enable or disable NDI streaming.
@@ -352,16 +318,11 @@ class ZowietekClient:
             ZowietekConnectionError: If the connection fails.
             ZowietekTimeoutError: If the request times out.
         """
-        try:
-            response = await self._request(
-                "/stream?option=setinfo",
-                {"group": "ndi", "ndi_enable": "1" if enabled else "0"},
-            )
-            await self._handle_response(response)
-        except aiohttp.ClientConnectionError as err:
-            raise ZowietekConnectionError(f"Unable to connect to {self._host}: {err}") from err
-        except TimeoutError as err:
-            raise ZowietekTimeoutError(f"Request timed out after {self._timeout} seconds") from err
+        response = await self._request(
+            "/stream?option=setinfo",
+            {"group": "ndi", "ndi_enable": "1" if enabled else "0"},
+        )
+        await self._handle_response(response)
 
     async def async_set_rtmp_enabled(self, enabled: bool) -> None:
         """Enable or disable RTMP streaming.
@@ -375,16 +336,11 @@ class ZowietekClient:
             ZowietekConnectionError: If the connection fails.
             ZowietekTimeoutError: If the request times out.
         """
-        try:
-            response = await self._request(
-                "/stream?option=setinfo",
-                {"group": "rtmp", "rtmp_enable": "1" if enabled else "0"},
-            )
-            await self._handle_response(response)
-        except aiohttp.ClientConnectionError as err:
-            raise ZowietekConnectionError(f"Unable to connect to {self._host}: {err}") from err
-        except TimeoutError as err:
-            raise ZowietekTimeoutError(f"Request timed out after {self._timeout} seconds") from err
+        response = await self._request(
+            "/stream?option=setinfo",
+            {"group": "rtmp", "rtmp_enable": "1" if enabled else "0"},
+        )
+        await self._handle_response(response)
 
     async def async_set_srt_enabled(self, enabled: bool) -> None:
         """Enable or disable SRT streaming.
@@ -398,16 +354,11 @@ class ZowietekClient:
             ZowietekConnectionError: If the connection fails.
             ZowietekTimeoutError: If the request times out.
         """
-        try:
-            response = await self._request(
-                "/stream?option=setinfo",
-                {"group": "srt", "srt_enable": "1" if enabled else "0"},
-            )
-            await self._handle_response(response)
-        except aiohttp.ClientConnectionError as err:
-            raise ZowietekConnectionError(f"Unable to connect to {self._host}: {err}") from err
-        except TimeoutError as err:
-            raise ZowietekTimeoutError(f"Request timed out after {self._timeout} seconds") from err
+        response = await self._request(
+            "/stream?option=setinfo",
+            {"group": "srt", "srt_enable": "1" if enabled else "0"},
+        )
+        await self._handle_response(response)
 
     async def async_reboot(self) -> None:
         """Reboot the device.
@@ -418,16 +369,11 @@ class ZowietekClient:
             ZowietekConnectionError: If the connection fails.
             ZowietekTimeoutError: If the request times out.
         """
-        try:
-            response = await self._request(
-                "/system?option=setinfo",
-                {"group": "reboot", "reboot": "1"},
-            )
-            await self._handle_response(response)
-        except aiohttp.ClientConnectionError as err:
-            raise ZowietekConnectionError(f"Unable to connect to {self._host}: {err}") from err
-        except TimeoutError as err:
-            raise ZowietekTimeoutError(f"Request timed out after {self._timeout} seconds") from err
+        response = await self._request(
+            "/system?option=setinfo",
+            {"group": "reboot", "reboot": "1"},
+        )
+        await self._handle_response(response)
 
     async def close(self) -> None:
         """Close the client session.

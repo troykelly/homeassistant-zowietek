@@ -576,6 +576,53 @@ class TestZowietekClientErrorHandling:
         with pytest.raises(ZowietekApiError):
             await client.async_get_system_info()
 
+    @pytest.mark.asyncio
+    async def test_unknown_api_error_status(self) -> None:
+        """Test handling of unknown API error status."""
+        unknown_status = "99999"
+        mock_response = _create_mock_response({"status": unknown_status, "rsp": "failed"})
+        mock_session = _create_mock_session(mock_response)
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
+
+        with pytest.raises(ZowietekApiError) as exc_info:
+            await client.async_get_system_info()
+
+        assert exc_info.value.status_code == unknown_status
+
+
+class TestZowietekClientRequestWithNoneData:
+    """Tests for request with None data parameter."""
+
+    @pytest.mark.asyncio
+    async def test_request_with_none_data(self) -> None:
+        """Test that request works when data parameter is None."""
+        mock_response = _create_mock_response({"status": STATUS_SUCCESS, "rsp": "succeed"})
+        mock_session = _create_mock_session(mock_response)
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
+
+        # Manually call _request with None data
+        await client._request("/test?option=getinfo", None)
+
+        # Verify the request was made
+        mock_session.post.assert_called_once()
+        call_kwargs = mock_session.post.call_args[1]
+
+        # The data should have only credentials
+        assert call_kwargs["json"]["user"] == "admin"
+        assert call_kwargs["json"]["psw"] == "admin"
+
 
 class TestZowietekClientSessionManagement:
     """Tests for ZowietekClient session management."""

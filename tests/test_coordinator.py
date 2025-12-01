@@ -110,12 +110,12 @@ def mock_stream_publish_info() -> dict[str, list[dict[str, str | int]]]:
         "publish": [
             {
                 "type": "rtmp",
-                "enable": 1,
+                "switch": 1,
                 "url": "rtmp://example.com/live/stream",
             },
             {
                 "type": "srt",
-                "enable": 0,
+                "switch": 0,
                 "url": "",
             },
         ],
@@ -128,7 +128,7 @@ def mock_ndi_config() -> dict[str, str | int]:
     return {
         "status": "00000",
         "rsp": "succeed",
-        "ndi_enable": 1,
+        "switch": 1,
         "ndi_name": "ZowieBox-Test",
     }
 
@@ -270,7 +270,7 @@ class TestZowietekCoordinatorUpdate:
         coordinator = ZowietekCoordinator(hass, mock_config_entry)
         await _refresh_coordinator(coordinator)
 
-        assert coordinator.data.stream["ndi_enable"] == 1
+        assert coordinator.data.stream["switch"] == 1
         assert coordinator.data.stream["ndi_name"] == "ZowieBox-Test"
 
 
@@ -327,7 +327,7 @@ class TestZowietekCoordinatorErrors:
         # Should still succeed with empty system/ndi data
         assert isinstance(coordinator.data, ZowietekData)
         assert coordinator.data.system == {}  # Optional endpoint failed
-        assert "ndi_enable" not in coordinator.data.stream  # NDI not available
+        assert "switch" not in coordinator.data.stream  # NDI not available
 
     async def test_optional_endpoint_non_dict_returns_empty(
         self,

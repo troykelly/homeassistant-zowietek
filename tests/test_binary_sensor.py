@@ -106,12 +106,12 @@ def mock_stream_publish_info() -> dict[str, list[dict[str, str | int]]]:
         "publish": [
             {
                 "type": "rtmp",
-                "enable": 1,
+                "switch": 1,
                 "url": "rtmp://example.com/live/stream",
             },
             {
                 "type": "srt",
-                "enable": 0,
+                "switch": 0,
                 "url": "srt://example.com:9000",
             },
         ],
@@ -124,7 +124,7 @@ def mock_ndi_config() -> dict[str, str | int]:
     return {
         "status": "00000",
         "rsp": "succeed",
-        "ndi_enable": 1,
+        "switch": 1,
         "ndi_name": "ZowieBox-Studio",
     }
 
@@ -304,14 +304,14 @@ class TestZowietekBinarySensorValues:
         mock_zowietek_client.async_get_ndi_config.return_value = {
             "status": "00000",
             "rsp": "succeed",
-            "ndi_enable": 0,
+            "switch": 0,
             "ndi_name": "ZowieBox-Studio",
         }
         # Disable RTMP and SRT
         mock_zowietek_client.async_get_stream_publish_info.return_value = {
             "publish": [
-                {"type": "rtmp", "enable": 0, "url": ""},
-                {"type": "srt", "enable": 0, "url": ""},
+                {"type": "rtmp", "switch": 0, "url": ""},
+                {"type": "srt", "switch": 0, "url": ""},
             ],
         }
 
@@ -442,7 +442,7 @@ class TestZowietekBinarySensorValues:
         mock_zowietek_client.async_get_ndi_config.return_value = {
             "status": "00000",
             "rsp": "succeed",
-            "ndi_enable": 0,
+            "switch": 0,
             "ndi_name": "ZowieBox-Studio",
         }
 
@@ -481,8 +481,8 @@ class TestZowietekBinarySensorValues:
         """Test RTMP enabled binary sensor is off when RTMP is disabled."""
         mock_zowietek_client.async_get_stream_publish_info.return_value = {
             "publish": [
-                {"type": "rtmp", "enable": 0, "url": ""},
-                {"type": "srt", "enable": 0, "url": ""},
+                {"type": "rtmp", "switch": 0, "url": ""},
+                {"type": "srt", "switch": 0, "url": ""},
             ],
         }
 
@@ -504,8 +504,8 @@ class TestZowietekBinarySensorValues:
         """Test SRT enabled binary sensor is on when SRT is enabled."""
         mock_zowietek_client.async_get_stream_publish_info.return_value = {
             "publish": [
-                {"type": "rtmp", "enable": 1, "url": "rtmp://example.com/live"},
-                {"type": "srt", "enable": 1, "url": "srt://example.com:9000"},
+                {"type": "rtmp", "switch": 1, "url": "rtmp://example.com/live"},
+                {"type": "srt", "switch": 1, "url": "srt://example.com:9000"},
             ],
         }
 
@@ -565,14 +565,14 @@ class TestZowietekBinarySensorValues:
         mock_zowietek_client.async_get_ndi_config.return_value = {
             "status": "00000",
             "rsp": "succeed",
-            "ndi_enable": 0,
+            "switch": 0,
             "ndi_name": "ZowieBox-Studio",
         }
         # Disable RTMP but enable SRT
         mock_zowietek_client.async_get_stream_publish_info.return_value = {
             "publish": [
-                {"type": "rtmp", "enable": 0, "url": ""},
-                {"type": "srt", "enable": 1, "url": "srt://example.com:9000"},
+                {"type": "rtmp", "switch": 0, "url": ""},
+                {"type": "srt", "switch": 1, "url": "srt://example.com:9000"},
             ],
         }
 
@@ -708,7 +708,7 @@ class TestZowietekBinarySensorValues:
         mock_zowietek_client.async_get_stream_publish_info.return_value = {
             "publish": [
                 "invalid_entry",  # Not a dict, should be skipped
-                {"type": "rtmp", "enable": 1, "url": "rtmp://example.com"},
+                {"type": "rtmp", "switch": 1, "url": "rtmp://example.com"},
             ],
         }
 
@@ -752,7 +752,7 @@ class TestZowietekBinarySensorValues:
         """Test RTMP enabled returns False when rtmp not in publish list."""
         mock_zowietek_client.async_get_stream_publish_info.return_value = {
             "publish": [
-                {"type": "srt", "enable": 1, "url": "srt://example.com"},
+                {"type": "srt", "switch": 1, "url": "srt://example.com"},
                 # No rtmp entry
             ],
         }

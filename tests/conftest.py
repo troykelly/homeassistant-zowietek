@@ -70,16 +70,23 @@ def mock_video_info() -> dict[str, Any]:
 
 @pytest.fixture
 def mock_stream_info() -> dict[str, Any]:
-    """Return mock stream info response."""
+    """Return mock stream info response.
+
+    The stream data combines publish list (RTMP/SRT) with NDI config.
+    NDI uses 'switch' for enabled state, publish entries also use 'switch'.
+    """
     return {
         "status": "00000",
         "rsp": "succeed",
-        "ndi_enable": "1",
-        "ndi_name": "ZowieBox-Test",
-        "rtmp_enable": "0",
-        "rtmp_url": "",
-        "srt_enable": "0",
-        "srt_url": "",
+        # NDI config fields (from /video group=ndi)
+        "switch": 1,  # NDI enabled state
+        "machinename": "ZowieBox-Test",
+        "mode_id": 1,
+        # Publish list (from /stream group=publish)
+        "publish": [
+            {"type": "rtmp", "index": 0, "switch": 0, "url": ""},
+            {"type": "srt", "index": 1, "switch": 0, "url": ""},
+        ],
     }
 
 
@@ -150,10 +157,12 @@ def add_coordinator_mocks(client: MagicMock) -> None:
         return_value={
             "status": "00000",
             "rsp": "succeed",
-            "ndi_enable": "1",
-            "ndi_name": "ZowieBox-Test",
-            "rtmp_enable": "0",
-            "srt_enable": "0",
+            "switch": 1,  # NDI enabled state
+            "machinename": "ZowieBox-Test",
+            "publish": [
+                {"type": "rtmp", "index": 0, "switch": 0, "url": ""},
+                {"type": "srt", "index": 1, "switch": 0, "url": ""},
+            ],
         }
     )
 
@@ -272,10 +281,12 @@ def create_mock_coordinator(
             "input_fps": "60",
         },
         "stream": {
-            "ndi_enable": "1",
-            "ndi_name": device_name,
-            "rtmp_enable": "0",
-            "srt_enable": "0",
+            "switch": 1,  # NDI enabled state
+            "machinename": device_name,
+            "publish": [
+                {"type": "rtmp", "index": 0, "switch": 0, "url": ""},
+                {"type": "srt", "index": 1, "switch": 0, "url": ""},
+            ],
         },
     }
     coordinator.last_update_success = True

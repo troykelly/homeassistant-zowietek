@@ -338,12 +338,15 @@ class ZowietekClient:
     async def async_get_ndi_config(self) -> dict[str, Any]:
         """Get NDI configuration.
 
+        NDI configuration is under the /video endpoint with group "ndi"
+        per the ZowieBox API documentation.
+
         Returns:
             NDI configuration and status.
         """
         data = await self._request(
-            "/ndi?option=getinfo",
-            {"group": "ndi", "opt": "get_config"},
+            "/video?option=getinfo",
+            {"group": "ndi", "opt": "get_ndi_info"},
         )
         return self._extract_data(data, "data")
 
@@ -401,6 +404,9 @@ class ZowietekClient:
     async def async_set_ndi_enabled(self, enabled: bool) -> None:
         """Enable or disable NDI streaming.
 
+        NDI configuration is under the /video endpoint with group "ndi"
+        per the ZowieBox API documentation.
+
         Args:
             enabled: True to enable NDI, False to disable.
 
@@ -408,11 +414,11 @@ class ZowietekClient:
             ZowietekAuthError: If authentication fails.
         """
         await self._request(
-            "/ndi?option=setinfo",
+            "/video?option=setinfo",
             {
                 "group": "ndi",
-                "opt": "set_config",
-                "data": {"ndi_enable": 1 if enabled else 0},
+                "opt": "set_ndi_info",
+                "data": {"switch": 1 if enabled else 0},
             },
             requires_auth=True,
         )

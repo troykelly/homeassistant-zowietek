@@ -97,7 +97,7 @@ def mock_stream_publish_info() -> dict[str, list[dict[str, str | int]]]:
         "publish": [
             {
                 "type": "rtmp",
-                "enable": 1,
+                "switch": 1,
                 "url": "rtmp://example.com/live/stream",
             },
         ],
@@ -110,7 +110,7 @@ def mock_ndi_config() -> dict[str, str | int]:
     return {
         "status": "00000",
         "rsp": "succeed",
-        "ndi_enable": 1,
+        "switch": 1,
         "ndi_name": "ZowieBox-Test",
     }
 

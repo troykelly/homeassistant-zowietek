@@ -179,20 +179,26 @@ class ZowietekBinarySensor(ZowietekEntity, BinarySensorEntity):
     def _is_ndi_enabled(self) -> bool:
         """Check if NDI streaming is enabled.
 
+        The NDI API returns 'switch' field for the enabled state.
+
         Returns:
             True if NDI is enabled.
         """
         stream_data = self.coordinator.data.stream
-        ndi_enable = stream_data.get("ndi_enable")
+        # NDI API uses 'switch' field for enabled state
+        ndi_switch = stream_data.get("switch")
 
-        if ndi_enable is None:
+        if ndi_switch is None:
             return False
 
         # Handle both int and string values
-        return str(ndi_enable) == "1"
+        return str(ndi_switch) == "1"
 
     def _is_stream_protocol_enabled(self, protocol: str) -> bool:
         """Check if a specific streaming protocol is enabled.
+
+        Checks the publish list for entries matching the protocol type.
+        The API uses 'switch' field for enabled state and 'type' for protocol.
 
         Args:
             protocol: The protocol type ('rtmp' or 'srt').
@@ -210,11 +216,12 @@ class ZowietekBinarySensor(ZowietekEntity, BinarySensorEntity):
             if not isinstance(entry, dict):
                 continue
             if entry.get("type") == protocol:
-                enable = entry.get("enable")
-                if enable is None:
+                # API uses 'switch' field for enabled state
+                switch = entry.get("switch")
+                if switch is None:
                     return False
                 # Handle both int and string values
-                return str(enable) == "1"
+                return str(switch) == "1"
 
         return False
 

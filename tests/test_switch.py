@@ -100,12 +100,12 @@ def mock_stream_publish_info() -> dict[str, list[dict[str, str | int]]]:
         "publish": [
             {
                 "type": "rtmp",
-                "enable": 1,
+                "switch": 1,
                 "url": "rtmp://example.com/live/stream",
             },
             {
                 "type": "srt",
-                "enable": 0,
+                "switch": 0,
                 "url": "srt://example.com:1234",
             },
         ],
@@ -118,7 +118,7 @@ def mock_ndi_config() -> dict[str, str | int]:
     return {
         "status": "00000",
         "rsp": "succeed",
-        "ndi_enable": 1,
+        "switch": 1,
         "ndi_name": "ZowieBox-Studio",
     }
 
@@ -313,7 +313,7 @@ class TestZowietekSwitchState:
         mock_zowietek_client.async_get_ndi_config.return_value = {
             "status": "00000",
             "rsp": "succeed",
-            "ndi_enable": 0,
+            "switch": 0,
             "ndi_name": "ZowieBox-Studio",
         }
 
@@ -365,7 +365,7 @@ class TestZowietekSwitchState:
             "publish": [
                 {
                     "type": "rtmp",
-                    "enable": 0,
+                    "switch": 0,
                     "url": "rtmp://example.com/live/stream",
                 },
             ],
@@ -419,7 +419,7 @@ class TestZowietekSwitchState:
             "publish": [
                 {
                     "type": "srt",
-                    "enable": 1,
+                    "switch": 1,
                     "url": "srt://example.com:1234",
                 },
             ],
@@ -857,7 +857,7 @@ class TestSwitchEdgeCases:
         mock_zowietek_client.async_get_ndi_config.return_value = {
             "status": "00000",
             "rsp": "succeed",
-            "ndi_enable": "1",
+            "switch": "1",
             "ndi_name": "ZowieBox-Studio",
         }
 
@@ -886,7 +886,7 @@ class TestSwitchEdgeCases:
         mock_zowietek_client.async_get_ndi_config.return_value = {
             "status": "00000",
             "rsp": "succeed",
-            "ndi_enable": "0",
+            "switch": "0",
             "ndi_name": "ZowieBox-Studio",
         }
 
@@ -916,7 +916,7 @@ class TestSwitchEdgeCases:
             "publish": [
                 {
                     "type": "rtmp",
-                    "enable": "1",
+                    "switch": "1",
                     "url": "rtmp://example.com/live/stream",
                 },
             ],
@@ -975,7 +975,7 @@ class TestSwitchEdgeCases:
                 "not_a_dict",
                 {
                     "type": "rtmp",
-                    "enable": 1,
+                    "switch": 1,
                     "url": "rtmp://example.com/live/stream",
                 },
             ],

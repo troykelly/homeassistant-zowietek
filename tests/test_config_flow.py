@@ -444,3 +444,164 @@ async def test_config_flow_device_info_fallback_with_hostname(
         assert result["type"] is FlowResultType.CREATE_ENTRY
         assert result["title"] == "ZowieBox (zow001)"
         assert result["result"].unique_id == "http://zow001.example.com"
+
+
+async def test_config_flow_general_api_error(
+    hass: HomeAssistant,
+) -> None:
+    """Test config flow handles general ZowietekError."""
+    from custom_components.zowietek.exceptions import ZowietekError
+
+    with patch(
+        "custom_components.zowietek.config_flow.ZowietekClient",
+        autospec=True,
+    ) as mock_client_class:
+        client = mock_client_class.return_value
+        client.async_test_connection = AsyncMock(side_effect=ZowietekError("General API error"))
+        client.close = AsyncMock()
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=None)
+
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": SOURCE_USER},
+        )
+
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {
+                CONF_HOST: "192.168.1.100",
+                CONF_USERNAME: "admin",
+                CONF_PASSWORD: "admin",
+            },
+        )
+
+        assert result["type"] is FlowResultType.FORM
+        assert result["errors"] == {"base": "cannot_connect"}
+
+
+async def test_config_flow_host_with_scheme_and_port(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+) -> None:
+    """Test config flow with host that has scheme and port."""
+    from custom_components.zowietek.exceptions import ZowietekApiError
+
+    with patch(
+        "custom_components.zowietek.config_flow.ZowietekClient",
+        autospec=True,
+    ) as mock_client_class:
+        client = mock_client_class.return_value
+        client.host = "http://192.168.1.100:8080"
+        client.async_test_connection = AsyncMock(return_value=True)
+        client.async_validate_credentials = AsyncMock(return_value=True)
+        # Device info unavailable - tests _derive_name_from_host
+        client.async_get_device_info = AsyncMock(
+            side_effect=ZowietekApiError("Invalid parameters", "00003")
+        )
+        client.close = AsyncMock()
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=None)
+
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": SOURCE_USER},
+        )
+
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {
+                CONF_HOST: "http://192.168.1.100:8080",
+                CONF_USERNAME: "admin",
+                CONF_PASSWORD: "admin",
+            },
+        )
+
+        # Port is stripped, IP returns "ZowieBox"
+        assert result["type"] is FlowResultType.CREATE_ENTRY
+        assert result["title"] == "ZowieBox"
+
+
+async def test_config_flow_host_with_port_and_subdomain(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+) -> None:
+    """Test config flow with host with port and subdomain."""
+    from custom_components.zowietek.exceptions import ZowietekApiError
+
+    with patch(
+        "custom_components.zowietek.config_flow.ZowietekClient",
+        autospec=True,
+    ) as mock_client_class:
+        client = mock_client_class.return_value
+        client.host = "http://zow001.local:8080"
+        client.async_test_connection = AsyncMock(return_value=True)
+        client.async_validate_credentials = AsyncMock(return_value=True)
+        # Device info unavailable - tests _derive_name_from_host
+        client.async_get_device_info = AsyncMock(
+            side_effect=ZowietekApiError("Invalid parameters", "00003")
+        )
+        client.close = AsyncMock()
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=None)
+
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": SOURCE_USER},
+        )
+
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {
+                CONF_HOST: "http://zow001.local:8080",
+                CONF_USERNAME: "admin",
+                CONF_PASSWORD: "admin",
+            },
+        )
+
+        # Port stripped, hostname derived
+        assert result["type"] is FlowResultType.CREATE_ENTRY
+        assert result["title"] == "ZowieBox (zow001)"
+
+
+async def test_config_flow_empty_hostname_fallback(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+) -> None:
+    """Test config flow with edge case where hostname is empty after parsing."""
+    from custom_components.zowietek.exceptions import ZowietekApiError
+
+    with patch(
+        "custom_components.zowietek.config_flow.ZowietekClient",
+        autospec=True,
+    ) as mock_client_class:
+        client = mock_client_class.return_value
+        # Edge case: just dots after scheme/port stripping
+        client.host = "http://....:8080"
+        client.async_test_connection = AsyncMock(return_value=True)
+        client.async_validate_credentials = AsyncMock(return_value=True)
+        # Device info unavailable - tests _derive_name_from_host fallback
+        client.async_get_device_info = AsyncMock(
+            side_effect=ZowietekApiError("Invalid parameters", "00003")
+        )
+        client.close = AsyncMock()
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=None)
+
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": SOURCE_USER},
+        )
+
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {
+                CONF_HOST: "....:8080",
+                CONF_USERNAME: "admin",
+                CONF_PASSWORD: "admin",
+            },
+        )
+
+        # Should fall back to "ZowieBox"
+        assert result["type"] is FlowResultType.CREATE_ENTRY
+        assert result["title"] == "ZowieBox"

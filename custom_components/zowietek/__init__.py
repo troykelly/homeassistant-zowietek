@@ -7,8 +7,6 @@ from typing import TYPE_CHECKING
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
-from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from .coordinator import ZowietekCoordinator
 
@@ -37,6 +35,10 @@ async def async_setup_entry(
     This function initializes the coordinator, performs the first data refresh,
     and forwards setup to all entity platforms.
 
+    The coordinator's async_config_entry_first_refresh() handles exceptions:
+    - ConfigEntryAuthFailed: Triggers reauthentication flow
+    - UpdateFailed: Converted to ConfigEntryNotReady for retry
+
     Args:
         hass: The Home Assistant instance.
         entry: The config entry for this integration instance.
@@ -50,14 +52,7 @@ async def async_setup_entry(
     """
     coordinator = ZowietekCoordinator(hass, entry)
 
-    try:
-        await coordinator.async_config_entry_first_refresh()
-    except ConfigEntryAuthFailed:
-        # Re-raise auth failures - triggers reauthentication flow
-        raise
-    except UpdateFailed as err:
-        # Convert UpdateFailed to ConfigEntryNotReady for initial setup
-        raise ConfigEntryNotReady(f"Failed to connect to device: {err}") from err
+    await coordinator.async_config_entry_first_refresh()
 
     entry.runtime_data = coordinator
 

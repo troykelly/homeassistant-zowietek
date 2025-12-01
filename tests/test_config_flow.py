@@ -23,6 +23,7 @@ def mock_setup_entry() -> Generator[AsyncMock]:
     with patch(
         "custom_components.zowietek.async_setup_entry",
         return_value=True,
+        create=True,
     ) as mock_setup:
         yield mock_setup
 
@@ -102,7 +103,8 @@ async def test_successful_config_flow(
         CONF_USERNAME: "admin",
         CONF_PASSWORD: "admin",
     }
-    assert result["unique_id"] == "ZBOX-ABC123"
+    # Verify unique_id was set correctly on the config entry
+    assert result["result"].unique_id == "ZBOX-ABC123"
 
 
 async def test_config_flow_connection_error(

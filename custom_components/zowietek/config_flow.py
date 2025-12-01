@@ -56,13 +56,19 @@ class ZowietekConfigFlow(ConfigFlow, domain=DOMAIN):
             device_info = await self._async_validate_input(host, username, password, errors)
 
             if not errors:
-                # Get unique_id from device serial number
+                # Get unique_id - prefer device serial, fall back to normalized host
                 device_sn = device_info.get("devicesn", "")
-                device_name = device_info.get("devicename", "ZowieBox")
+                device_name = device_info.get("devicename", "")
+                normalized_host = device_info.get("normalized_host", host)
 
-                if device_sn:
-                    await self.async_set_unique_id(device_sn)
-                    self._abort_if_unique_id_configured()
+                # Use device serial if available, otherwise use normalized host
+                unique_id = device_sn if device_sn else normalized_host
+                await self.async_set_unique_id(unique_id)
+                self._abort_if_unique_id_configured()
+
+                # Use device name if available, otherwise derive from host
+                if not device_name:
+                    device_name = self._derive_name_from_host(host)
 
                 return self.async_create_entry(
                     title=device_name,
@@ -135,11 +141,59 @@ class ZowietekConfigFlow(ConfigFlow, domain=DOMAIN):
             client: The ZowietekClient instance.
 
         Returns:
-            Device info dictionary with devicesn and devicename.
+            Device info dictionary with devicesn, devicename, and normalized_host.
         """
-        data = await client.async_get_device_info()
-        return {
-            "devicesn": data.get("devicesn", ""),
-            "devicename": data.get("devicename", "ZowieBox"),
-            "softver": data.get("softver", ""),
+        result: dict[str, Any] = {
+            "devicesn": "",
+            "devicename": "",
+            "softver": "",
+            "normalized_host": client.host,
         }
+
+        # Try to get device info from API (not all firmware versions support this)
+        try:
+            data = await client.async_get_device_info()
+            result["devicesn"] = data.get("devicesn", "")
+            result["devicename"] = data.get("devicename", "")
+            result["softver"] = data.get("softver", "")
+        except ZowietekError:
+            # Device info endpoint not supported - use host-based identification
+            _LOGGER.debug(
+                "Device info API not available for %s, using host-based identification",
+                client.host,
+            )
+
+        return result
+
+    @staticmethod
+    def _derive_name_from_host(host: str) -> str:
+        """Derive a friendly device name from the host.
+
+        Args:
+            host: The host/IP address of the device.
+
+        Returns:
+            A friendly device name.
+        """
+        # Remove scheme if present
+        name = host
+        if "://" in name:
+            name = name.split("://", 1)[1]
+
+        # Remove port if present
+        if ":" in name:
+            name = name.rsplit(":", 1)[0]
+
+        # If it's an IP address, just use "ZowieBox"
+        if name.replace(".", "").isdigit():
+            return "ZowieBox"
+
+        # Use hostname part (first segment before dots for subdomains)
+        parts = name.split(".")
+        if len(parts) > 0:
+            hostname = parts[0]
+            # Capitalize if it looks like a name
+            if hostname and not hostname[0].isdigit():
+                return f"ZowieBox ({hostname})"
+
+        return "ZowieBox"

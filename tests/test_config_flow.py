@@ -36,6 +36,7 @@ def mock_client_success() -> Generator[MagicMock]:
         autospec=True,
     ) as mock_client_class:
         client = mock_client_class.return_value
+        client.host = "http://192.168.1.100"
         client.async_test_connection = AsyncMock(return_value=True)
         client.async_validate_credentials = AsyncMock(return_value=True)
         client.async_get_device_info = AsyncMock(
@@ -360,10 +361,11 @@ async def test_config_flow_host_hostname(
     assert result["type"] is FlowResultType.CREATE_ENTRY
 
 
-async def test_config_flow_api_error(
+async def test_config_flow_device_info_fallback(
     hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
 ) -> None:
-    """Test config flow handles API error during device info fetch."""
+    """Test config flow falls back to host-based ID when device info unavailable."""
     from custom_components.zowietek.exceptions import ZowietekApiError
 
     with patch(
@@ -371,8 +373,10 @@ async def test_config_flow_api_error(
         autospec=True,
     ) as mock_client_class:
         client = mock_client_class.return_value
+        client.host = "http://192.168.1.100"
         client.async_test_connection = AsyncMock(return_value=True)
         client.async_validate_credentials = AsyncMock(return_value=True)
+        # Device info endpoint not supported - should fall back gracefully
         client.async_get_device_info = AsyncMock(
             side_effect=ZowietekApiError("Invalid parameters", "00003")
         )
@@ -394,5 +398,49 @@ async def test_config_flow_api_error(
             },
         )
 
-        assert result["type"] is FlowResultType.FORM
-        assert result["errors"] == {"base": "cannot_connect"}
+        # Should succeed with host-based unique_id
+        assert result["type"] is FlowResultType.CREATE_ENTRY
+        assert result["title"] == "ZowieBox"
+        assert result["result"].unique_id == "http://192.168.1.100"
+
+
+async def test_config_flow_device_info_fallback_with_hostname(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+) -> None:
+    """Test config flow derives name from hostname when device info unavailable."""
+    from custom_components.zowietek.exceptions import ZowietekApiError
+
+    with patch(
+        "custom_components.zowietek.config_flow.ZowietekClient",
+        autospec=True,
+    ) as mock_client_class:
+        client = mock_client_class.return_value
+        client.host = "http://zow001.example.com"
+        client.async_test_connection = AsyncMock(return_value=True)
+        client.async_validate_credentials = AsyncMock(return_value=True)
+        client.async_get_device_info = AsyncMock(
+            side_effect=ZowietekApiError("Invalid parameters", "00003")
+        )
+        client.close = AsyncMock()
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=None)
+
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": SOURCE_USER},
+        )
+
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {
+                CONF_HOST: "zow001.example.com",
+                CONF_USERNAME: "admin",
+                CONF_PASSWORD: "admin",
+            },
+        )
+
+        # Should succeed with hostname-derived name
+        assert result["type"] is FlowResultType.CREATE_ENTRY
+        assert result["title"] == "ZowieBox (zow001)"
+        assert result["result"].unique_id == "http://zow001.example.com"

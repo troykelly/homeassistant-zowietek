@@ -1451,3 +1451,146 @@ class TestZowietekClientNdiModeSetter:
 
         with pytest.raises(ZowietekAuthError):
             await client.async_set_ndi_mode(3)
+
+
+class TestZowietekClientMppRestartStatus:
+    """Tests for ZowietekClient handling of MPP restart status code.
+
+    The ZowieBox device returns status 10000 with "mpp restart..." when
+    the media processing pipeline needs to restart after a codec change.
+    This should be treated as a successful operation.
+    """
+
+    @pytest.mark.asyncio
+    async def test_mpp_restart_status_treated_as_success(self) -> None:
+        """Test that status 10000 with 'mpp restart' is treated as success."""
+        mock_response = _create_mock_response(
+            {
+                "status": "10000",
+                "rsp": "mpp restart...",
+            }
+        )
+        mock_session = _create_mock_session(mock_response)
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
+
+        # This should NOT raise an exception
+        await client.async_set_encoder_codec(1)
+
+        mock_session.post.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_mpp_restart_status_with_ndi_mode(self) -> None:
+        """Test that status 10000 is handled for NDI mode changes too."""
+        mock_response = _create_mock_response(
+            {
+                "status": "10000",
+                "rsp": "mpp restart...",
+            }
+        )
+        mock_session = _create_mock_session(mock_response)
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
+
+        # This should NOT raise an exception
+        await client.async_set_ndi_mode(3)
+
+        mock_session.post.assert_called_once()
+
+
+class TestZowietekClientRebootEmptyResponse:
+    """Tests for ZowietekClient handling of empty reboot response.
+
+    When a reboot command is issued, the device may close the connection
+    before sending a response. This should be handled gracefully.
+    """
+
+    @pytest.mark.asyncio
+    async def test_reboot_with_empty_response(self) -> None:
+        """Test that empty response during reboot is handled gracefully."""
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.json = AsyncMock(
+            side_effect=aiohttp.ContentTypeError(MagicMock(), MagicMock(), message="Empty response")
+        )
+
+        mock_session = MagicMock(spec=aiohttp.ClientSession)
+        mock_session.closed = False
+        mock_session.close = AsyncMock()
+
+        context_manager = MagicMock()
+        context_manager.__aenter__ = AsyncMock(return_value=mock_response)
+        context_manager.__aexit__ = AsyncMock(return_value=None)
+        mock_session.post = MagicMock(return_value=context_manager)
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
+
+        # This should NOT raise an exception for reboot
+        await client.async_reboot()
+
+        mock_session.post.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_reboot_with_json_decode_error(self) -> None:
+        """Test that JSONDecodeError during reboot is handled gracefully."""
+        import json
+
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.json = AsyncMock(side_effect=json.JSONDecodeError("Expecting value", "", 0))
+
+        mock_session = MagicMock(spec=aiohttp.ClientSession)
+        mock_session.closed = False
+        mock_session.close = AsyncMock()
+
+        context_manager = MagicMock()
+        context_manager.__aenter__ = AsyncMock(return_value=mock_response)
+        context_manager.__aexit__ = AsyncMock(return_value=None)
+        mock_session.post = MagicMock(return_value=context_manager)
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
+
+        # This should NOT raise an exception for reboot
+        await client.async_reboot()
+
+        mock_session.post.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_reboot_with_connection_reset(self) -> None:
+        """Test that connection reset during reboot is handled gracefully."""
+        mock_session = MagicMock(spec=aiohttp.ClientSession)
+        mock_session.closed = False
+        mock_session.close = AsyncMock()
+        mock_session.post = MagicMock(side_effect=aiohttp.ClientConnectionError("Connection reset"))
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
+
+        # This should NOT raise an exception for reboot
+        await client.async_reboot()
+
+        mock_session.post.assert_called_once()

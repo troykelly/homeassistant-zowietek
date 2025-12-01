@@ -1,4 +1,5 @@
 """The Zowietek integration."""
+
 from __future__ import annotations
 
 # TODO: Implement integration setup

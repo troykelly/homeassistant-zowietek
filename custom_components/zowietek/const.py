@@ -1,4 +1,5 @@
 """Constants for the Zowietek integration."""
+
 from __future__ import annotations
 
 DOMAIN = "zowietek"

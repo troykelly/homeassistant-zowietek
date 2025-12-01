@@ -38,22 +38,11 @@ def mock_client_success() -> Generator[MagicMock]:
         client = mock_client_class.return_value
         client.async_test_connection = AsyncMock(return_value=True)
         client.async_validate_credentials = AsyncMock(return_value=True)
-        client.async_get_system_time = AsyncMock(
+        client.async_get_device_info = AsyncMock(
             return_value={
-                "year": 2024,
-                "month": 1,
-                "day": 15,
-            }
-        )
-        client._request = AsyncMock(
-            return_value={
-                "status": "00000",
-                "rsp": "succeed",
-                "data": {
-                    "devicesn": "ZBOX-ABC123",
-                    "devicename": "ZowieBox-Office",
-                    "softver": "1.2.3",
-                },
+                "devicesn": "ZBOX-ABC123",
+                "devicename": "ZowieBox-Office",
+                "softver": "1.2.3",
             }
         )
         client.close = AsyncMock()
@@ -384,7 +373,9 @@ async def test_config_flow_api_error(
         client = mock_client_class.return_value
         client.async_test_connection = AsyncMock(return_value=True)
         client.async_validate_credentials = AsyncMock(return_value=True)
-        client._request = AsyncMock(side_effect=ZowietekApiError("Invalid parameters", "00003"))
+        client.async_get_device_info = AsyncMock(
+            side_effect=ZowietekApiError("Invalid parameters", "00003")
+        )
         client.close = AsyncMock()
         client.__aenter__ = AsyncMock(return_value=client)
         client.__aexit__ = AsyncMock(return_value=None)

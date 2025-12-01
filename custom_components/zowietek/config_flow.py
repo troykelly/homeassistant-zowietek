@@ -137,18 +137,9 @@ class ZowietekConfigFlow(ConfigFlow, domain=DOMAIN):
         Returns:
             Device info dictionary with devicesn and devicename.
         """
-        # Get system info which contains device serial and name
-        response = await client._request(
-            "/system?option=getinfo",
-            {"group": "devinfo"},
-        )
-
-        data = response.get("data", {})
-        if isinstance(data, dict):
-            return {
-                "devicesn": data.get("devicesn", ""),
-                "devicename": data.get("devicename", "ZowieBox"),
-                "softver": data.get("softver", ""),
-            }
-
-        return {}
+        data = await client.async_get_device_info()
+        return {
+            "devicesn": data.get("devicesn", ""),
+            "devicename": data.get("devicename", "ZowieBox"),
+            "softver": data.get("softver", ""),
+        }

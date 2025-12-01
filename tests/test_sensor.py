@@ -661,3 +661,76 @@ class TestSensorAvailability:
         sensor = ZowietekSensor(coordinator, descriptions["video_resolution"])
 
         assert sensor.available is False
+
+
+class TestSensorEdgeCases:
+    """Tests for sensor native_value edge cases."""
+
+    async def test_invalid_value_key_format_returns_none(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test sensor returns None when value_key has invalid format (no dot)."""
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+
+        # Create a description with a value_key that doesn't have a dot
+        desc = ZowietekSensorEntityDescription(
+            key="bad_format",
+            name="Bad Format",
+            value_key="nodotinthiskey",  # Missing section.key format
+        )
+
+        sensor = ZowietekSensor(coordinator, desc)
+
+        assert sensor.native_value is None
+
+    async def test_nonexistent_section_returns_none(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test sensor returns None when section doesn't exist."""
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+
+        # Create a description referencing a non-existent section
+        desc = ZowietekSensorEntityDescription(
+            key="bad_section",
+            name="Bad Section",
+            value_key="nonexistent_section.some_key",
+        )
+
+        sensor = ZowietekSensor(coordinator, desc)
+
+        assert sensor.native_value is None
+
+    async def test_non_standard_type_converted_to_string(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test sensor converts non-standard types to string."""
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+
+        # Add a non-standard value to video data (list)
+        coordinator.data.video["test_list_value"] = ["item1", "item2"]
+
+        desc = ZowietekSensorEntityDescription(
+            key="test_list",
+            name="Test List",
+            value_key="video.test_list_value",
+        )
+
+        sensor = ZowietekSensor(coordinator, desc)
+
+        # Should convert list to string
+        assert sensor.native_value == "['item1', 'item2']"

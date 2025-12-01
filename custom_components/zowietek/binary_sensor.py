@@ -22,17 +22,15 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True, kw_only=True)
-class ZowietekBinarySensorEntityDescription(  # type: ignore[override]
-    BinarySensorEntityDescription,
-):
+class ZowietekBinarySensorEntityDescription(BinarySensorEntityDescription):  # type: ignore[override]
     """Describes a Zowietek binary sensor entity.
 
     Extends BinarySensorEntityDescription with sensor_type to identify
     what kind of binary state this sensor monitors.
 
-    The type: ignore[override] is needed because frozen dataclasses
-    generate __replace__ methods with incompatible signatures when
-    extending other dataclasses. This is a known mypy limitation.
+    The type: ignore[override] is required because frozen dataclasses with
+    additional fields generate __replace__ methods with incompatible signatures
+    when extending other frozen dataclasses.
     """
 
     sensor_type: str

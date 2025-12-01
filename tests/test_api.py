@@ -674,6 +674,108 @@ class TestZowietekClientWriteOperations:
 
         mock_session.post.assert_called_once()
 
+    @pytest.mark.asyncio
+    async def test_async_set_ndi_enabled_true(self) -> None:
+        """Test enabling NDI stream."""
+        mock_response = _create_mock_response(
+            {
+                "status": STATUS_SUCCESS,
+                "rsp": "succeed",
+            }
+        )
+        mock_session = _create_mock_session(mock_response)
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
+
+        await client.async_set_ndi_enabled(True)
+
+        mock_session.post.assert_called_once()
+        call_args = mock_session.post.call_args
+        json_data = call_args[1]["json"]
+        assert json_data["data"]["ndi_enable"] == 1
+
+    @pytest.mark.asyncio
+    async def test_async_set_ndi_enabled_false(self) -> None:
+        """Test disabling NDI stream."""
+        mock_response = _create_mock_response(
+            {
+                "status": STATUS_SUCCESS,
+                "rsp": "succeed",
+            }
+        )
+        mock_session = _create_mock_session(mock_response)
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
+
+        await client.async_set_ndi_enabled(False)
+
+        mock_session.post.assert_called_once()
+        call_args = mock_session.post.call_args
+        json_data = call_args[1]["json"]
+        assert json_data["data"]["ndi_enable"] == 0
+
+    @pytest.mark.asyncio
+    async def test_async_set_stream_enabled_rtmp_true(self) -> None:
+        """Test enabling RTMP stream."""
+        mock_response = _create_mock_response(
+            {
+                "status": STATUS_SUCCESS,
+                "rsp": "succeed",
+            }
+        )
+        mock_session = _create_mock_session(mock_response)
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
+
+        await client.async_set_stream_enabled("rtmp", True)
+
+        mock_session.post.assert_called_once()
+        call_args = mock_session.post.call_args
+        json_data = call_args[1]["json"]
+        assert json_data["type"] == "rtmp"
+        assert json_data["enable"] == 1
+
+    @pytest.mark.asyncio
+    async def test_async_set_stream_enabled_srt_false(self) -> None:
+        """Test disabling SRT stream."""
+        mock_response = _create_mock_response(
+            {
+                "status": STATUS_SUCCESS,
+                "rsp": "succeed",
+            }
+        )
+        mock_session = _create_mock_session(mock_response)
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
+
+        await client.async_set_stream_enabled("srt", False)
+
+        mock_session.post.assert_called_once()
+        call_args = mock_session.post.call_args
+        json_data = call_args[1]["json"]
+        assert json_data["type"] == "srt"
+        assert json_data["enable"] == 0
+
 
 class TestZowietekClientErrorHandling:
     """Tests for ZowietekClient error handling."""

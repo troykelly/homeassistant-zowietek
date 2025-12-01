@@ -49,6 +49,17 @@
       "device_mode": {
         "name": "Device mode"
       }
+    },
+    "switch": {
+      "ndi_stream": {
+        "name": "NDI stream"
+      },
+      "rtmp_stream": {
+        "name": "RTMP stream"
+      },
+      "srt_stream": {
+        "name": "SRT stream"
+      }
     }
   }
 }

@@ -398,6 +398,51 @@ class ZowietekClient:
             requires_auth=True,
         )
 
+    async def async_set_ndi_enabled(self, enabled: bool) -> None:
+        """Enable or disable NDI streaming.
+
+        Args:
+            enabled: True to enable NDI, False to disable.
+
+        Raises:
+            ZowietekAuthError: If authentication fails.
+        """
+        await self._request(
+            "/ndi?option=setinfo",
+            {
+                "group": "ndi",
+                "opt": "set_config",
+                "data": {"ndi_enable": 1 if enabled else 0},
+            },
+            requires_auth=True,
+        )
+
+    async def async_set_stream_enabled(
+        self,
+        stream_type: str,
+        enabled: bool,
+    ) -> None:
+        """Enable or disable a stream publishing destination.
+
+        Args:
+            stream_type: The stream type ('rtmp' or 'srt').
+            enabled: True to enable the stream, False to disable.
+
+        Raises:
+            ZowietekAuthError: If authentication fails.
+            ZowietekApiError: If the stream type is invalid.
+        """
+        await self._request(
+            "/stream?option=setinfo",
+            {
+                "group": "publish",
+                "opt": "set_enable",
+                "type": stream_type,
+                "enable": 1 if enabled else 0,
+            },
+            requires_auth=True,
+        )
+
     async def close(self) -> None:
         """Close the client session.
 

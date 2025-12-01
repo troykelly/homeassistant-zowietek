@@ -930,3 +930,95 @@ class TestSwitchEdgeCases:
         switch = ZowietekSwitch(coordinator, descriptions["rtmp_stream"])
 
         assert switch.is_on is True
+
+    async def test_publish_list_not_list_returns_false(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test switch returns False when publish is not a list."""
+        from custom_components.zowietek.switch import (
+            SWITCH_DESCRIPTIONS,
+            ZowietekSwitch,
+        )
+
+        # Return non-list value for publish
+        mock_zowietek_client.async_get_stream_publish_info.return_value = {
+            "publish": "not_a_list",
+        }
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        descriptions = {desc.key: desc for desc in SWITCH_DESCRIPTIONS}
+
+        switch = ZowietekSwitch(coordinator, descriptions["rtmp_stream"])
+
+        assert switch.is_on is False
+
+    async def test_publish_entry_not_dict_skipped(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test switch skips non-dict entries in publish list."""
+        from custom_components.zowietek.switch import (
+            SWITCH_DESCRIPTIONS,
+            ZowietekSwitch,
+        )
+
+        # Return list with non-dict entry followed by valid entry
+        mock_zowietek_client.async_get_stream_publish_info.return_value = {
+            "publish": [
+                "not_a_dict",
+                {
+                    "type": "rtmp",
+                    "enable": 1,
+                    "url": "rtmp://example.com/live/stream",
+                },
+            ],
+        }
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        descriptions = {desc.key: desc for desc in SWITCH_DESCRIPTIONS}
+
+        switch = ZowietekSwitch(coordinator, descriptions["rtmp_stream"])
+
+        # Should skip the non-dict entry and find the valid one
+        assert switch.is_on is True
+
+    async def test_publish_entry_enable_none_returns_false(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test switch returns False when enable key is None."""
+        from custom_components.zowietek.switch import (
+            SWITCH_DESCRIPTIONS,
+            ZowietekSwitch,
+        )
+
+        # Return entry without enable key
+        mock_zowietek_client.async_get_stream_publish_info.return_value = {
+            "publish": [
+                {
+                    "type": "rtmp",
+                    # enable key missing
+                    "url": "rtmp://example.com/live/stream",
+                },
+            ],
+        }
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        descriptions = {desc.key: desc for desc in SWITCH_DESCRIPTIONS}
+
+        switch = ZowietekSwitch(coordinator, descriptions["rtmp_stream"])
+
+        assert switch.is_on is False

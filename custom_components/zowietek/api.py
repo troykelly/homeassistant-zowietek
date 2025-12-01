@@ -272,6 +272,18 @@ class ZowietekClient:
         )
         return self._extract_data(data, "data")
 
+    async def async_get_device_info(self) -> dict[str, Any]:
+        """Get device information from the device.
+
+        Returns:
+            Device information including serial number, name, and firmware version.
+        """
+        data = await self._request(
+            "/system?option=getinfo",
+            {"group": "devinfo"},
+        )
+        return self._extract_data(data, "data")
+
     async def async_get_video_info(self) -> dict[str, Any]:
         """Get comprehensive video information from the device.
 

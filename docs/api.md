@@ -382,6 +382,8 @@ All encoding operations use `/video` with `group: "venc"`.
 }
 ```
 
+**Note:** Encoding parameter changes require an active HDMI input signal. Returns status `10001` "HDMI no signal" if no signal is present.
+
 ---
 
 ## 8. Decoding (/streamplay)
@@ -537,6 +539,32 @@ Controls audio capture, encoding and output routing.
 ### 11.3 Audio switch
 
 Usually a field in the above, or a dedicated opt depending on firmware.
+
+### 11.4 Set audio volume
+
+- **Endpoint:** `POST /audio?option=setinfo&login_check_flag=1`
+- **Body:**
+
+```json
+{
+  "group": "audio",
+  "volume": 75
+}
+```
+
+- **Parameters:**
+  - `volume`: Integer 0-100 representing the audio input volume level
+
+**Note:** Requires active HDMI input signal. Returns status `10001` "HDMI no signal" if no signal.
+
+**Response:**
+
+```json
+{
+  "status": "00000",
+  "rsp": "succeed"
+}
+```
 
 ---
 

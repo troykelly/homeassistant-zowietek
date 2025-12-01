@@ -597,6 +597,56 @@ class ZowietekClient:
             requires_auth=True,
         )
 
+    async def async_set_audio_volume(self, volume: int) -> None:
+        """Set the audio volume.
+
+        Args:
+            volume: The volume level (0-100).
+
+        Raises:
+            ZowietekAuthError: If authentication fails.
+            ZowietekApiError: If the volume value is invalid or no HDMI signal.
+
+        Note:
+            This operation requires an active HDMI input signal. The device
+            will return error 10001 "HDMI no signal" if no signal is present.
+        """
+        await self._request(
+            "/audio?option=setinfo",
+            {
+                "group": "audio",
+                "volume": volume,
+            },
+            requires_auth=True,
+        )
+
+    async def async_set_encoder_bitrate(self, bitrate: int) -> None:
+        """Set the encoder bitrate.
+
+        Sets the bitrate for the main encoder channel (venc_chnid=0, desc=main).
+
+        Args:
+            bitrate: The bitrate in bits per second (e.g., 12000000 for 12 Mbps).
+
+        Raises:
+            ZowietekAuthError: If authentication fails.
+            ZowietekApiError: If the bitrate value is invalid.
+        """
+        await self._request(
+            "/video?option=setinfo",
+            {
+                "group": "venc",
+                "venc": [
+                    {
+                        "venc_chnid": 0,
+                        "bitrate": bitrate,
+                        "desc": "main",
+                    },
+                ],
+            },
+            requires_auth=True,
+        )
+
     async def close(self) -> None:
         """Close the client session.
 

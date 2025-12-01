@@ -229,6 +229,10 @@ def add_coordinator_mocks(client: MagicMock) -> None:
         }
     )
 
+    # Write methods for number entities
+    client.async_set_audio_volume = AsyncMock()
+    client.async_set_encoder_bitrate = AsyncMock()
+
 
 def setup_mock_zowietek_client(
     client: MagicMock,

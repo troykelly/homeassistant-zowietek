@@ -16,6 +16,7 @@ from custom_components.zowietek.const import DOMAIN
 from custom_components.zowietek.sensor import (
     SENSOR_DESCRIPTIONS,
     ZowietekSensor,
+    ZowietekSensorEntityDescription,
 )
 
 if TYPE_CHECKING:
@@ -449,6 +450,105 @@ class TestZowietekSensorValues:
         sensor = ZowietekSensor(coordinator, descriptions["ndi_name"])
 
         assert sensor.native_value is None
+
+    async def test_invalid_value_key_returns_none(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test sensor returns None when value_key is invalid (no dot)."""
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+
+        # Create a description with invalid value_key (no section.key format)
+        invalid_description = ZowietekSensorEntityDescription(
+            key="invalid_sensor",
+            name="Invalid",
+            icon="mdi:help",
+            value_key="invalid_no_dot",  # Invalid - no dot separator
+        )
+
+        sensor = ZowietekSensor(coordinator, invalid_description)
+
+        assert sensor.native_value is None
+
+    async def test_coordinator_data_none_returns_none(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test sensor returns None when coordinator data is None."""
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        descriptions = {desc.key: desc for desc in SENSOR_DESCRIPTIONS}
+
+        # Manually set coordinator.data to None
+        coordinator.data = None
+
+        sensor = ZowietekSensor(coordinator, descriptions["video_resolution"])
+
+        assert sensor.native_value is None
+
+    async def test_invalid_section_returns_none(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test sensor returns None when section doesn't exist in coordinator data."""
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+
+        # Create a description with non-existent section
+        invalid_description = ZowietekSensorEntityDescription(
+            key="nonexistent_sensor",
+            name="Nonexistent",
+            icon="mdi:help",
+            value_key="nonexistent_section.some_key",
+        )
+
+        sensor = ZowietekSensor(coordinator, invalid_description)
+
+        assert sensor.native_value is None
+
+    async def test_non_primitive_value_converted_to_string(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test sensor converts non-primitive values to string."""
+        # Set up a complex value in the mock response
+        mock_zowietek_client.async_get_device_info.return_value = {
+            "status": "00000",
+            "rsp": "succeed",
+            "devicesn": "zowiebox-test-12345",
+            "devicename": "ZowieBox-Test",
+            "softver": "1.2.3",
+            "complex_value": ["list", "value"],  # Non-primitive
+        }
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+
+        # Create a description pointing to the complex value
+        complex_description = ZowietekSensorEntityDescription(
+            key="complex_sensor",
+            name="Complex",
+            icon="mdi:help",
+            value_key="system.complex_value",
+        )
+
+        sensor = ZowietekSensor(coordinator, complex_description)
+
+        # Should convert list to string
+        assert sensor.native_value == "['list', 'value']"
 
 
 class TestSensorSetup:

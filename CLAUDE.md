@@ -96,6 +96,35 @@ See skill: `ha-zowietek-typing`
 
 See skill: `ha-zowietek-research`
 
+### 6. Mandatory Live Device Testing
+
+**All code MUST be tested against real devices when available.**
+
+Unit tests with mocks are necessary but NOT sufficient. Before any code is considered complete:
+
+1. **Check for available devices:**
+   ```python
+   import os
+   zowietek_url = os.environ.get("ZOWIETEK_URL")
+   zowietek_username = os.environ.get("ZOWIETEK_USERNAME")
+   zowietek_password = os.environ.get("ZOWIETEK_PASSWORD")
+   ```
+
+2. **If credentials exist, test against the device:**
+   - API client changes: Test all affected endpoints
+   - Entity changes: Verify state updates from real device
+   - Config flow changes: Test actual device discovery/connection
+
+3. **For Home Assistant integration code:**
+   - Start/restart the dev HA instance
+   - Add/reconfigure the integration via UI
+   - Verify entities appear and update correctly
+   - Check logs for errors or warnings
+
+**Live testing is NOT optional.** The experience with issue #8 proved that mocked tests can pass while real device behavior is completely different.
+
+See skill: `ha-zowietek-live-testing`
+
 ## Project Structure
 
 ```
@@ -317,6 +346,7 @@ This project uses specialized skills for consistent, high-quality development. S
 | Type annotations | `ha-zowietek-typing` | Automatic with issue-executor |
 | Failed twice | `ha-zowietek-research` | Stop and research before continuing |
 | HA patterns | `ha-zowietek-integration` | Reference for HA best practices |
+| Before marking complete | `ha-zowietek-live-testing` | Validate against real devices and HA |
 
 ## Device Capabilities
 

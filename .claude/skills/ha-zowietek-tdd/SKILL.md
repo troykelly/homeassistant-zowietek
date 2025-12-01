@@ -276,10 +276,84 @@ def requires_live_device(
         pytest.skip("ZOWIETEK_URL and credentials required for live tests")
 ```
 
+## Mandatory Live Testing Phase
+
+**After GREEN phase, test against real devices.**
+
+Unit tests with mocks prove code logic. Live tests prove real-world behavior.
+
+### Check for Available Devices
+
+```python
+import os
+
+zowietek_url = os.environ.get("ZOWIETEK_URL")
+zowietek_username = os.environ.get("ZOWIETEK_USERNAME")
+zowietek_password = os.environ.get("ZOWIETEK_PASSWORD")
+```
+
+**If credentials exist, you MUST test against the device before marking work complete.**
+
+### API Client Testing
+
+```python
+import asyncio
+import aiohttp
+from custom_components.zowietek.api import ZowietekClient
+
+async def test_live():
+    async with aiohttp.ClientSession() as session:
+        client = ZowietekClient(
+            host=os.environ["ZOWIETEK_URL"],
+            username=os.environ["ZOWIETEK_USERNAME"],
+            password=os.environ["ZOWIETEK_PASSWORD"],
+            session=session,
+        )
+        # Test the methods you changed
+        result = await client.async_get_system_time()
+        print(f"System time: {result}")
+
+asyncio.run(test_live())
+```
+
+### Home Assistant Integration Testing
+
+For changes that affect HA integration behavior:
+
+1. **Start the dev HA instance:**
+   ```bash
+   # Check if HA is running
+   pgrep -f "hass" || hass -c /workspaces/homeassistant-zowietek/config
+   ```
+
+2. **Configure integration via UI:**
+   - Navigate to Settings → Devices & Services
+   - Add Integration → Zowietek
+   - Enter device credentials
+   - Verify setup completes
+
+3. **Verify entities:**
+   - Check entities appear in HA
+   - Verify state updates correctly
+   - Check logs for errors: `tail -f config/home-assistant.log`
+
+### Why This Matters
+
+Issue #8 taught us: **mocked tests can pass while real behavior is completely broken.**
+
+The original API client had 100% test coverage and all tests passing. But when tested against real devices:
+- Login worked
+- Every subsequent request failed with "Authentication required"
+- The entire API format was wrong
+
+Live testing caught what mocks could not.
+
 ## The Bottom Line
 
 **Every line of code starts with a failing test.**
 
 No shortcuts. No exceptions. No rationalizations.
 
-RED -> GREEN -> REFACTOR. Always.
+RED -> GREEN -> REFACTOR -> **LIVE TEST**. Always.
+
+See skill: `ha-zowietek-live-testing` for detailed procedures.

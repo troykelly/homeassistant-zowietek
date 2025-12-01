@@ -45,10 +45,14 @@ This skill orchestrates the complete implementation of a bug fix or feature from
 |  6. FULL TEST SUITE                                               |
 |     pytest, mypy, ruff - ALL must pass                            |
 |                                                                   |
-|  7. CREATE PR                                                     |
+|  7. LIVE DEVICE TESTING (MANDATORY)                               |
+|     Test against ZowieBox devices if credentials available        |
+|     Test in dev HA instance if HA-impacting changes               |
+|                                                                   |
+|  8. CREATE PR                                                     |
 |     Link to issue with "Fixes #N"                                 |
 |                                                                   |
-|  8. UPDATE MEMORY                                                 |
+|  9. UPDATE MEMORY                                                 |
 |     Record completion for future sessions                         |
 |                                                                   |
 +------------------------------------------------------------------+
@@ -263,7 +267,115 @@ There is NO SUCH THING as an "unrelated" issue. If it's failing, fix it.
 4. Re-run full test suite
 5. Loop until all green
 
-## Step 7: Create Pull Request
+## Step 7: Live Device Testing (MANDATORY)
+
+**Unit tests are NOT sufficient. Live testing is MANDATORY.**
+
+Issue #8 proved this: the original API client had 100% test coverage, all tests passing - but was completely broken against real devices.
+
+### Check for Available Devices
+
+```python
+import os
+zowietek_url = os.environ.get("ZOWIETEK_URL")
+zowietek_username = os.environ.get("ZOWIETEK_USERNAME")
+zowietek_password = os.environ.get("ZOWIETEK_PASSWORD")
+```
+
+### If Credentials Exist: Test API Changes
+
+For any changes to `api.py` or code that calls the API:
+
+```python
+import asyncio
+import aiohttp
+import os
+from custom_components.zowietek.api import ZowietekClient
+
+async def test_live():
+    async with aiohttp.ClientSession() as session:
+        client = ZowietekClient(
+            host=os.environ["ZOWIETEK_URL"],
+            username=os.environ["ZOWIETEK_USERNAME"],
+            password=os.environ["ZOWIETEK_PASSWORD"],
+            session=session,
+        )
+        # Test affected methods
+        result = await client.async_get_system_time()
+        print(f"Result: {result}")
+
+asyncio.run(test_live())
+```
+
+Test against ALL available devices (check for `ZOWIETEK_URL_2`, etc.).
+
+### If HA-Impacting Changes: Test in Dev HA
+
+For changes to config flow, coordinator, entities, or services:
+
+1. **Prepare configuration:**
+   ```bash
+   # Create config directory if needed
+   mkdir -p /workspaces/homeassistant-zowietek/config
+
+   # Ensure custom_components is linked
+   ln -sf /workspaces/homeassistant-zowietek/custom_components \
+          /workspaces/homeassistant-zowietek/config/custom_components
+   ```
+
+2. **Start Home Assistant:**
+   ```bash
+   # Kill existing instance if running
+   pkill -f "hass" || true
+
+   # Start HA in background
+   hass -c /workspaces/homeassistant-zowietek/config &
+
+   # Wait for startup
+   sleep 30
+   ```
+
+3. **Test via UI:**
+   - Open http://localhost:8123
+   - Settings → Devices & Services → Add Integration
+   - Search for "Zowietek"
+   - Enter device URL and credentials
+   - Verify setup completes without errors
+
+4. **Verify functionality:**
+   - Check entities appear correctly
+   - Verify states update from device
+   - Test any switches/buttons work
+   - Check logs: `tail -f config/home-assistant.log | grep -i zowietek`
+
+5. **Cleanup:**
+   ```bash
+   # Stop HA when done
+   pkill -f "hass"
+   ```
+
+### What to Report
+
+After live testing, update the issue or PR with:
+
+- Devices tested (URLs, firmware versions if relevant)
+- All methods/features tested
+- Any discrepancies between mock and real behavior
+- HA integration test results (if applicable)
+
+### If Live Testing Reveals Issues
+
+1. **Do NOT proceed to PR creation**
+2. Go back to Step 4 (TDD)
+3. Write a failing test that captures the live issue
+4. Fix the implementation
+5. Re-run full test suite
+6. Re-run live testing
+7. Loop until live testing passes
+
+See skill: `ha-zowietek-live-testing` for detailed procedures.
+
+## Step 8: Create Pull Request
 
 ```bash
 # Push branch
@@ -288,8 +400,15 @@ Fixes #N
 ## Test Plan
 
 - [x] Unit tests added/updated
-- [x] All tests passing
-- [x] Manual testing completed (if applicable)
+- [x] All tests passing (100% coverage)
+- [x] Live device testing completed
+- [x] HA integration testing completed (if applicable)
+
+## Live Testing Results
+
+- Tested against: [device URLs]
+- All API calls successful
+- HA entities functioning correctly
 
 ## Breaking Changes
 
@@ -305,7 +424,7 @@ EOF
 
 **Critical:** The `Fixes #N` line auto-closes the issue when PR merges.
 
-## Step 8: Update Memory
+## Step 9: Update Memory
 
 Record for future sessions:
 - Issue completed
@@ -353,6 +472,7 @@ This skill works with other skills. Reference them for specific guidance:
 | HA patterns | `ha-zowietek-integration` | Config flow, coordinator, entities |
 | Video encoder | `ha-zowietek-video-encoder` | ZowieBox specifics |
 | GitHub operations | `ha-zowietek-github` | Commit format, branch naming, labels |
+| Before marking complete | `ha-zowietek-live-testing` | Device testing, HA testing procedures |
 
 ## Red Flags - STOP and Reassess
 

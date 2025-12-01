@@ -4,13 +4,11 @@ from __future__ import annotations
 
 import logging
 from types import TracebackType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import aiohttp
 
 from .const import (
-    STATUS_INVALID_PARAMS,
-    STATUS_NOT_LOGGED_IN,
     STATUS_SUCCESS,
 )
 from .exceptions import (
@@ -21,32 +19,35 @@ from .exceptions import (
 )
 
 if TYPE_CHECKING:
-    from .models import (
-        ZowietekAudioInfo,
-        ZowietekNetworkInfo,
-        ZowietekStreamInfo,
-        ZowietekSystemInfo,
-        ZowietekVideoInfo,
-    )
+    from typing import Any
 
 _LOGGER = logging.getLogger(__name__)
 
 DEFAULT_TIMEOUT = 10
 
+# API Status Codes
+STATUS_NOT_LOGGED_IN = "80003"
+STATUS_WRONG_PASSWORD = "80005"
+STATUS_INVALID_PARAMS = "00003"
+
 
 class ZowietekClient:
     """Async client for ZowieBox API.
 
-    This client provides methods for authenticating with and retrieving
-    information from ZowieBox video streaming devices.
+    This client provides methods for communicating with ZowieBox video
+    streaming devices. The ZowieBox API uses a JSON-RPC style interface
+    where requests include 'group' and 'opt' fields to specify the operation.
+
+    Most read operations do not require authentication. Write operations
+    may require authentication depending on device configuration.
 
     The client can be used as an async context manager for automatic
     session cleanup.
 
     Example:
         async with ZowietekClient(host, username, password) as client:
-            await client.async_login()
-            info = await client.async_get_system_info()
+            video_info = await client.async_get_video_info()
+            system_time = await client.async_get_system_time()
     """
 
     __slots__ = (
@@ -70,8 +71,8 @@ class ZowietekClient:
 
         Args:
             host: The hostname or IP address of the ZowieBox device.
-            username: Username for authentication.
-            password: Password for authentication.
+            username: Username for authentication (used for write operations).
+            password: Password for authentication (used for write operations).
             session: Optional aiohttp ClientSession. If not provided, one will
                 be created and managed by this client.
             timeout: Request timeout in seconds. Defaults to 10.
@@ -118,34 +119,42 @@ class ZowietekClient:
     async def _request(
         self,
         endpoint: str,
-        data: dict[str, str] | None = None,
-    ) -> aiohttp.ClientResponse:
+        data: dict[str, Any],
+        requires_auth: bool = False,
+    ) -> dict[str, Any]:
         """Make a POST request to the ZowieBox API.
 
         Args:
-            endpoint: The API endpoint path (e.g., "/system?option=getinfo").
+            endpoint: The API endpoint path (e.g., "/video?option=getinfo").
             data: JSON data to send in the request body.
+            requires_auth: Whether to include authentication credentials.
 
         Returns:
-            The aiohttp response object.
+            The parsed JSON response data.
 
         Raises:
             ZowietekConnectionError: If the connection fails.
             ZowietekTimeoutError: If the request times out.
+            ZowietekAuthError: If authentication is required or failed.
+            ZowietekApiError: If the API returns an error status.
         """
         session = await self._get_session()
+
+        # Add login_check_flag to query string if not present
+        if "login_check_flag" not in endpoint:
+            separator = "&" if "?" in endpoint else "?"
+            endpoint = f"{endpoint}{separator}login_check_flag=1"
+
         url = f"{self._host}{endpoint}"
 
-        if data is None:
-            data = {}
-
-        # Always include credentials in the request
-        data["user"] = self._username
-        data["psw"] = self._password
+        # Include credentials for authenticated requests
+        if requires_auth:
+            data = {**data, "user": self._username, "psw": self._password}
 
         try:
             timeout = aiohttp.ClientTimeout(total=self._timeout)
-            return await session.post(url, json=data, timeout=timeout)
+            async with session.post(url, json=data, timeout=timeout) as response:
+                return await self._handle_response(response)
         except TimeoutError as err:
             raise ZowietekTimeoutError(
                 f"Request to {url} timed out after {self._timeout} seconds"
@@ -156,7 +165,7 @@ class ZowietekClient:
     async def _handle_response(
         self,
         response: aiohttp.ClientResponse,
-    ) -> dict[str, str | int | bool]:
+    ) -> dict[str, Any]:
         """Handle the API response and check for errors.
 
         Args:
@@ -170,210 +179,212 @@ class ZowietekClient:
             ZowietekApiError: If the API returns an error status.
         """
         try:
-            data: dict[str, str | int | bool] = await response.json()
+            data: dict[str, Any] = await response.json()
         except aiohttp.ContentTypeError as err:
             raise ZowietekApiError(f"Invalid JSON response from device: {err}") from err
 
         status = str(data.get("status", ""))
 
-        if status == STATUS_NOT_LOGGED_IN:
+        if status in (STATUS_NOT_LOGGED_IN, STATUS_WRONG_PASSWORD):
             raise ZowietekAuthError("Authentication required or failed")
 
         if status == STATUS_INVALID_PARAMS:
+            rsp = data.get("rsp", "Unknown error")
             raise ZowietekApiError(
-                "Invalid parameters in request",
+                f"Invalid parameters: {rsp}",
                 status_code=STATUS_INVALID_PARAMS,
             )
 
         if status != STATUS_SUCCESS:
+            rsp = data.get("rsp", "Unknown error")
             raise ZowietekApiError(
-                f"API returned error status: {status}",
+                f"API returned error status {status}: {rsp}",
                 status_code=status,
             )
 
         return data
 
-    async def async_login(self) -> bool:
-        """Authenticate with the ZowieBox device.
+    @staticmethod
+    def _extract_data(
+        response: dict[str, Any],
+        key: str,
+    ) -> dict[str, Any]:
+        """Extract nested data from API response with proper typing.
+
+        Args:
+            response: The full API response dictionary.
+            key: The key to extract from the response.
 
         Returns:
-            True if authentication was successful.
+            The nested data dict, or the full response if key is not present.
+        """
+        value = response.get(key)
+        if isinstance(value, dict):
+            return cast("dict[str, Any]", value)
+        return response
+
+    async def async_test_connection(self) -> bool:
+        """Test connection to the device by fetching system time.
+
+        This is a lightweight check that doesn't require authentication.
+
+        Returns:
+            True if the connection was successful.
 
         Raises:
-            ZowietekAuthError: If authentication fails.
             ZowietekConnectionError: If the connection fails.
             ZowietekTimeoutError: If the request times out.
         """
-        response = await self._request(
-            "/system?option=setinfo&login_check_flag=1",
-            {"group": "user"},
-        )
-        await self._handle_response(response)
+        await self.async_get_system_time()
         return True
 
-    async def async_get_system_info(self) -> ZowietekSystemInfo:
-        """Get system information from the device.
+    async def async_validate_credentials(self) -> bool:
+        """Validate that the provided credentials are correct.
+
+        Attempts an authenticated request to verify credentials.
 
         Returns:
-            System information including device name, serial, firmware version.
+            True if credentials are valid.
 
         Raises:
-            ZowietekAuthError: If authentication is required.
-            ZowietekApiError: If the API returns an error.
+            ZowietekAuthError: If credentials are invalid.
             ZowietekConnectionError: If the connection fails.
             ZowietekTimeoutError: If the request times out.
         """
-        response = await self._request(
-            "/system?option=getinfo",
-            {"group": "all"},
+        # Use a setinfo endpoint that requires auth but has no side effects
+        # when called with minimal data
+        await self._request(
+            "/system?option=setinfo",
+            {"group": "user", "user": self._username, "psw": self._password},
+            requires_auth=False,  # Credentials are in the body for this specific call
         )
-        data = await self._handle_response(response)
-        return data  # type: ignore[return-value]
+        return True
 
-    async def async_get_video_info(self) -> ZowietekVideoInfo:
-        """Get video information from the device.
+    async def async_get_system_time(self) -> dict[str, Any]:
+        """Get system time from the device.
 
         Returns:
-            Video information including input signal, resolution, framerate.
-
-        Raises:
-            ZowietekAuthError: If authentication is required.
-            ZowietekApiError: If the API returns an error.
-            ZowietekConnectionError: If the connection fails.
-            ZowietekTimeoutError: If the request times out.
+            System time information including year, month, day, hour, minute, second.
         """
-        response = await self._request(
+        data = await self._request(
+            "/system?option=getinfo",
+            {"group": "systime", "opt": "get_systime_info"},
+        )
+        return self._extract_data(data, "data")
+
+    async def async_get_video_info(self) -> dict[str, Any]:
+        """Get comprehensive video information from the device.
+
+        Returns:
+            Video information including encoding settings, input/output config.
+        """
+        data = await self._request(
             "/video?option=getinfo",
             {"group": "all"},
         )
-        data = await self._handle_response(response)
-        return data  # type: ignore[return-value]
+        return self._extract_data(data, "all")
 
-    async def async_get_audio_info(self) -> ZowietekAudioInfo:
-        """Get audio information from the device.
+    async def async_get_input_signal(self) -> dict[str, Any]:
+        """Get HDMI input signal information.
 
         Returns:
-            Audio information including enabled state, codec, volume.
-
-        Raises:
-            ZowietekAuthError: If authentication is required.
-            ZowietekApiError: If the API returns an error.
-            ZowietekConnectionError: If the connection fails.
-            ZowietekTimeoutError: If the request times out.
+            Input signal details including resolution, framerate, signal presence.
         """
-        response = await self._request(
-            "/audio?option=getinfo",
-            {"group": "all"},
+        data = await self._request(
+            "/video?option=getinfo",
+            {"group": "hdmi", "opt": "get_input_info"},
         )
-        data = await self._handle_response(response)
-        return data  # type: ignore[return-value]
+        return self._extract_data(data, "data")
 
-    async def async_get_stream_info(self) -> ZowietekStreamInfo:
-        """Get stream information from the device.
+    async def async_get_output_info(self) -> dict[str, Any]:
+        """Get HDMI output configuration.
 
         Returns:
-            Stream information including NDI, RTMP, SRT settings.
-
-        Raises:
-            ZowietekAuthError: If authentication is required.
-            ZowietekApiError: If the API returns an error.
-            ZowietekConnectionError: If the connection fails.
-            ZowietekTimeoutError: If the request times out.
+            Output configuration including format, audio switch status.
         """
-        response = await self._request(
+        data = await self._request(
+            "/video?option=getinfo",
+            {"group": "hdmi", "opt": "get_output_info"},
+        )
+        return self._extract_data(data, "data")
+
+    async def async_get_stream_publish_info(self) -> dict[str, Any]:
+        """Get stream publishing information.
+
+        Returns:
+            List of configured stream publishing destinations.
+        """
+        data = await self._request(
             "/stream?option=getinfo",
-            {"group": "all"},
+            {"group": "publish"},
         )
-        data = await self._handle_response(response)
-        return data  # type: ignore[return-value]
+        publish_list = data.get("publish")
+        if isinstance(publish_list, list):
+            return {"publish": publish_list}
+        return {"publish": []}
 
-    async def async_get_network_info(self) -> ZowietekNetworkInfo:
-        """Get network information from the device.
+    async def async_get_ndi_config(self) -> dict[str, Any]:
+        """Get NDI configuration.
 
         Returns:
-            Network information including IP address, netmask, gateway.
-
-        Raises:
-            ZowietekAuthError: If authentication is required.
-            ZowietekApiError: If the API returns an error.
-            ZowietekConnectionError: If the connection fails.
-            ZowietekTimeoutError: If the request times out.
+            NDI configuration and status.
         """
-        response = await self._request(
-            "/network?option=getinfo",
-            {"group": "all"},
+        data = await self._request(
+            "/ndi?option=getinfo",
+            {"group": "ndi", "opt": "get_config"},
         )
-        data = await self._handle_response(response)
-        return data  # type: ignore[return-value]
+        return self._extract_data(data, "data")
 
-    async def async_set_ndi_enabled(self, enabled: bool) -> None:
-        """Enable or disable NDI streaming.
+    async def async_set_output_format(self, format_str: str) -> None:
+        """Set the HDMI output format.
 
         Args:
-            enabled: True to enable NDI, False to disable.
+            format_str: Output format (e.g., "1080p60", "2160p30").
 
         Raises:
-            ZowietekAuthError: If authentication is required.
-            ZowietekApiError: If the API returns an error.
-            ZowietekConnectionError: If the connection fails.
-            ZowietekTimeoutError: If the request times out.
+            ZowietekAuthError: If authentication fails.
+            ZowietekApiError: If the format is invalid.
         """
-        response = await self._request(
-            "/stream?option=setinfo",
-            {"group": "ndi", "ndi_enable": "1" if enabled else "0"},
+        await self._request(
+            "/video?option=setinfo",
+            {
+                "group": "hdmi",
+                "opt": "set_output_info",
+                "data": {"format": format_str},
+            },
+            requires_auth=True,
         )
-        await self._handle_response(response)
 
-    async def async_set_rtmp_enabled(self, enabled: bool) -> None:
-        """Enable or disable RTMP streaming.
+    async def async_set_loop_out(self, enabled: bool) -> None:
+        """Enable or disable HDMI loop output.
 
         Args:
-            enabled: True to enable RTMP, False to disable.
+            enabled: True to enable loop output, False to disable.
 
         Raises:
-            ZowietekAuthError: If authentication is required.
-            ZowietekApiError: If the API returns an error.
-            ZowietekConnectionError: If the connection fails.
-            ZowietekTimeoutError: If the request times out.
+            ZowietekAuthError: If authentication fails.
         """
-        response = await self._request(
-            "/stream?option=setinfo",
-            {"group": "rtmp", "rtmp_enable": "1" if enabled else "0"},
+        await self._request(
+            "/video?option=setinfo",
+            {
+                "group": "hdmi",
+                "opt": "set_output_info",
+                "data": {"loop_out_switch": 1 if enabled else 0},
+            },
+            requires_auth=True,
         )
-        await self._handle_response(response)
-
-    async def async_set_srt_enabled(self, enabled: bool) -> None:
-        """Enable or disable SRT streaming.
-
-        Args:
-            enabled: True to enable SRT, False to disable.
-
-        Raises:
-            ZowietekAuthError: If authentication is required.
-            ZowietekApiError: If the API returns an error.
-            ZowietekConnectionError: If the connection fails.
-            ZowietekTimeoutError: If the request times out.
-        """
-        response = await self._request(
-            "/stream?option=setinfo",
-            {"group": "srt", "srt_enable": "1" if enabled else "0"},
-        )
-        await self._handle_response(response)
 
     async def async_reboot(self) -> None:
         """Reboot the device.
 
         Raises:
-            ZowietekAuthError: If authentication is required.
-            ZowietekApiError: If the API returns an error.
-            ZowietekConnectionError: If the connection fails.
-            ZowietekTimeoutError: If the request times out.
+            ZowietekAuthError: If authentication fails.
         """
-        response = await self._request(
+        await self._request(
             "/system?option=setinfo",
-            {"group": "reboot", "reboot": "1"},
+            {"group": "syscontrol", "opt": "set_reboot_info"},
+            requires_auth=True,
         )
-        await self._handle_response(response)
 
     async def close(self) -> None:
         """Close the client session.

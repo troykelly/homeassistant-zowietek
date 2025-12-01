@@ -98,16 +98,106 @@ class ZowietekNetworkInfo(TypedDict):
     mac_address: NotRequired[str]
 
 
+class ZowietekDeviceInfo(TypedDict):
+    """Device information from async_get_device_info API.
+
+    Contains device identification and version information as returned
+    by the actual ZowieBox API endpoint.
+    """
+
+    status: NotRequired[str]
+    rsp: NotRequired[str]
+    devicesn: NotRequired[str]
+    devicename: NotRequired[str]
+    softver: NotRequired[str]
+    hardver: NotRequired[str]
+    mac: NotRequired[str]
+
+
+class ZowietekVideoData(TypedDict):
+    """Video information from async_get_video_info API.
+
+    Contains encoder settings and video configuration as returned
+    by the actual ZowieBox API endpoint.
+    """
+
+    status: NotRequired[str]
+    rsp: NotRequired[str]
+    enc_type: NotRequired[str]
+    enc_bitrate: NotRequired[int]
+    enc_resolution: NotRequired[str]
+    enc_framerate: NotRequired[int]
+
+
+class ZowietekInputSignal(TypedDict):
+    """Input signal information from async_get_input_signal API.
+
+    Contains HDMI input signal status as returned by the actual
+    ZowieBox API endpoint.
+    """
+
+    status: NotRequired[str]
+    rsp: NotRequired[str]
+    signal: NotRequired[int]
+    width: NotRequired[int]
+    height: NotRequired[int]
+    fps: NotRequired[int]
+
+
+class ZowietekOutputInfo(TypedDict):
+    """Output information from async_get_output_info API.
+
+    Contains HDMI output configuration as returned by the actual
+    ZowieBox API endpoint.
+    """
+
+    status: NotRequired[str]
+    rsp: NotRequired[str]
+    format: NotRequired[str]
+    loop_out_switch: NotRequired[int]
+
+
+class ZowietekPublishEntry(TypedDict):
+    """Single publish entry from stream publish info."""
+
+    type: NotRequired[str]
+    enable: NotRequired[int]
+    url: NotRequired[str]
+
+
+class ZowietekStreamPublish(TypedDict):
+    """Stream publish information from async_get_stream_publish_info API.
+
+    Contains list of configured stream publishing destinations.
+    """
+
+    publish: list[ZowietekPublishEntry]
+
+
+class ZowietekNdiConfig(TypedDict):
+    """NDI configuration from async_get_ndi_config API.
+
+    Contains NDI streaming configuration as returned by the actual
+    ZowieBox API endpoint.
+    """
+
+    status: NotRequired[str]
+    rsp: NotRequired[str]
+    ndi_enable: NotRequired[int]
+    ndi_name: NotRequired[str]
+
+
 @dataclass
 class ZowietekData:
     """Container for all ZowieBox device data.
 
     This dataclass aggregates all information types from the device
-    for use by the DataUpdateCoordinator.
+    for use by the DataUpdateCoordinator. Uses generic dict types
+    to accommodate the actual API response structure.
     """
 
-    system: ZowietekSystemInfo
-    video: ZowietekVideoInfo
-    audio: ZowietekAudioInfo
-    stream: ZowietekStreamInfo
-    network: ZowietekNetworkInfo
+    system: dict[str, str | int]
+    video: dict[str, str | int]
+    audio: dict[str, str | int]
+    stream: dict[str, str | int | list[dict[str, str | int]]]
+    network: dict[str, str | int]

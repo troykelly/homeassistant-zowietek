@@ -1348,3 +1348,106 @@ class TestZowietekClientDashboardInfo:
 
         assert result["persistent_time"] == "02:30:15"
         assert result["cpu_temp"] == 45.5
+
+
+class TestZowietekClientEncoderCodecSetter:
+    """Tests for ZowietekClient encoder codec setter."""
+
+    @pytest.mark.asyncio
+    async def test_async_set_encoder_codec_success(self) -> None:
+        """Test successful encoder codec setting."""
+        mock_response = _create_mock_response(
+            {
+                "status": STATUS_SUCCESS,
+                "rsp": "succeed",
+            }
+        )
+        mock_session = _create_mock_session(mock_response)
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
+
+        await client.async_set_encoder_codec(1)
+
+        call_args = mock_session.post.call_args
+        json_data = call_args[1]["json"]
+        assert json_data["group"] == "venc"
+        assert json_data["venc"][0]["codec"]["selected_id"] == 1
+        assert json_data["user"] == "admin"
+
+    @pytest.mark.asyncio
+    async def test_async_set_encoder_codec_auth_failure(self) -> None:
+        """Test encoder codec setting with auth failure."""
+        mock_response = _create_mock_response(
+            {
+                "status": STATUS_NOT_LOGGED_IN,
+                "rsp": "failed",
+            }
+        )
+        mock_session = _create_mock_session(mock_response)
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="wrong",
+            session=mock_session,
+        )
+
+        with pytest.raises(ZowietekAuthError):
+            await client.async_set_encoder_codec(1)
+
+
+class TestZowietekClientNdiModeSetter:
+    """Tests for ZowietekClient NDI mode setter."""
+
+    @pytest.mark.asyncio
+    async def test_async_set_ndi_mode_success(self) -> None:
+        """Test successful NDI mode setting."""
+        mock_response = _create_mock_response(
+            {
+                "status": STATUS_SUCCESS,
+                "rsp": "succeed",
+            }
+        )
+        mock_session = _create_mock_session(mock_response)
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
+
+        await client.async_set_ndi_mode(3)
+
+        call_args = mock_session.post.call_args
+        json_data = call_args[1]["json"]
+        assert json_data["group"] == "ndi"
+        assert json_data["opt"] == "set_ndi_info"
+        assert json_data["data"]["mode_id"] == 3
+        assert json_data["user"] == "admin"
+
+    @pytest.mark.asyncio
+    async def test_async_set_ndi_mode_auth_failure(self) -> None:
+        """Test NDI mode setting with auth failure."""
+        mock_response = _create_mock_response(
+            {
+                "status": STATUS_NOT_LOGGED_IN,
+                "rsp": "failed",
+            }
+        )
+        mock_session = _create_mock_session(mock_response)
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="wrong",
+            session=mock_session,
+        )
+
+        with pytest.raises(ZowietekAuthError):
+            await client.async_set_ndi_mode(3)

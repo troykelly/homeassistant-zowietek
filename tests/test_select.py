@@ -845,3 +845,244 @@ class TestSelectEdgeCases:
         # Should use default fallback options
         assert len(select.options) > 0
         assert "1080p60" in select.options
+
+    async def test_codec_selected_id_not_int_returns_none(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test encoder type returns None when codec_selected_id is not int."""
+        from custom_components.zowietek.select import (
+            SELECT_DESCRIPTIONS,
+            ZowietekSelect,
+        )
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        descriptions = {desc.key: desc for desc in SELECT_DESCRIPTIONS}
+
+        # Manually set codec_selected_id to a non-int value in data
+        coordinator.data.video["codec_selected_id"] = "invalid"
+
+        select = ZowietekSelect(coordinator, descriptions["encoder_type"])
+
+        assert select.current_option is None
+
+    async def test_codec_selected_id_out_of_bounds(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test encoder type returns None when codec_selected_id is out of bounds."""
+        from custom_components.zowietek.select import (
+            SELECT_DESCRIPTIONS,
+            ZowietekSelect,
+        )
+
+        # Return selected_id out of bounds
+        mock_zowietek_client.async_get_venc_info.return_value = {
+            "venc": [
+                {
+                    "venc_chnid": 0,
+                    "codec": {
+                        "selected_id": 99,  # Out of bounds
+                        "codec_list": ["H.264", "H.265"],
+                    },
+                    "desc": "main",
+                },
+            ],
+        }
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        descriptions = {desc.key: desc for desc in SELECT_DESCRIPTIONS}
+
+        select = ZowietekSelect(coordinator, descriptions["encoder_type"])
+
+        assert select.current_option is None
+
+    async def test_output_format_none_returns_none(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test output format returns None when format not in data."""
+        from custom_components.zowietek.select import (
+            SELECT_DESCRIPTIONS,
+            ZowietekSelect,
+        )
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        descriptions = {desc.key: desc for desc in SELECT_DESCRIPTIONS}
+
+        # Manually remove output_format from data
+        del coordinator.data.video["output_format"]
+
+        select = ZowietekSelect(coordinator, descriptions["output_format"])
+
+        assert select.current_option is None
+
+    async def test_set_encoder_codec_not_found_raises_error(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test setting encoder type raises error when codec not in list."""
+        from custom_components.zowietek.exceptions import ZowietekApiError
+        from custom_components.zowietek.select import (
+            SELECT_DESCRIPTIONS,
+            ZowietekSelect,
+        )
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        descriptions = {desc.key: desc for desc in SELECT_DESCRIPTIONS}
+
+        select = ZowietekSelect(coordinator, descriptions["encoder_type"])
+
+        # Test the internal _set_encoder_type directly with invalid codec
+        with pytest.raises(ZowietekApiError) as exc_info:
+            await select._set_encoder_type("UNKNOWN_CODEC")
+
+        assert "not found" in str(exc_info.value)
+
+    async def test_set_encoder_codec_list_not_available(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test setting encoder type raises error when codec_list not available."""
+        from custom_components.zowietek.exceptions import ZowietekApiError
+        from custom_components.zowietek.select import (
+            SELECT_DESCRIPTIONS,
+            ZowietekSelect,
+        )
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        descriptions = {desc.key: desc for desc in SELECT_DESCRIPTIONS}
+
+        select = ZowietekSelect(coordinator, descriptions["encoder_type"])
+
+        # Manually set codec_list to a non-list value
+        coordinator.data.video["codec_list"] = "not_a_list"
+
+        # Test the internal _set_encoder_type directly
+        with pytest.raises(ZowietekApiError) as exc_info:
+            await select._set_encoder_type("H.264")
+
+        assert "not available" in str(exc_info.value)
+
+    async def test_unknown_select_type_current_option_returns_none(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test select with unknown type returns None for current_option."""
+        from dataclasses import replace
+
+        from custom_components.zowietek.select import (
+            SELECT_DESCRIPTIONS,
+            ZowietekSelect,
+        )
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        # Create a modified description with unknown select_type
+        desc = SELECT_DESCRIPTIONS[0]
+        unknown_desc = replace(desc, select_type="unknown_type")
+
+        select = ZowietekSelect(coordinator, unknown_desc)
+
+        assert select.current_option is None
+
+    async def test_unknown_select_type_options_returns_empty(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test select with unknown type returns empty options."""
+        from dataclasses import replace
+
+        from custom_components.zowietek.select import (
+            SELECT_DESCRIPTIONS,
+            ZowietekSelect,
+        )
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        # Create a modified description with unknown select_type
+        desc = SELECT_DESCRIPTIONS[0]
+        unknown_desc = replace(desc, select_type="unknown_type")
+
+        select = ZowietekSelect(coordinator, unknown_desc)
+
+        assert select.options == []
+
+    async def test_output_format_fallback_adds_current(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test output format fallback adds current format to options."""
+        from custom_components.zowietek.select import (
+            DEFAULT_OUTPUT_FORMATS,
+            SELECT_DESCRIPTIONS,
+            ZowietekSelect,
+        )
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        descriptions = {desc.key: desc for desc in SELECT_DESCRIPTIONS}
+
+        # Set a custom format not in defaults and remove format_list
+        coordinator.data.video["output_format"] = "CUSTOM_FORMAT"
+        if "output_format_list" in coordinator.data.video:
+            del coordinator.data.video["output_format_list"]
+
+        select = ZowietekSelect(coordinator, descriptions["output_format"])
+
+        # Should include default options and the custom current format
+        assert "CUSTOM_FORMAT" in select.options
+        assert all(f in select.options for f in DEFAULT_OUTPUT_FORMATS)
+
+    async def test_options_returns_empty_when_data_none(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test options returns empty list when coordinator data is None."""
+        from custom_components.zowietek.select import (
+            SELECT_DESCRIPTIONS,
+            ZowietekSelect,
+        )
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        descriptions = {desc.key: desc for desc in SELECT_DESCRIPTIONS}
+
+        # Set data to None
+        coordinator.data = None
+
+        select = ZowietekSelect(coordinator, descriptions["encoder_type"])
+
+        assert select.options == []

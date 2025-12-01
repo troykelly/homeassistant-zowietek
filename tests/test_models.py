@@ -317,6 +317,11 @@ class TestZowietekData:
         field_names = [f.name for f in fields(ZowietekData)]
         assert "network" in field_names
 
+    def test_zowietek_data_has_dashboard_field(self) -> None:
+        """Test that ZowietekData has a dashboard field."""
+        field_names = [f.name for f in fields(ZowietekData)]
+        assert "dashboard" in field_names
+
     def test_zowietek_data_can_be_instantiated(self) -> None:
         """Test that ZowietekData can be created with all info types."""
         system: ZowietekSystemInfo = {
@@ -346,12 +351,19 @@ class TestZowietekData:
             "ip_address": "192.168.1.100",
         }
 
+        dashboard: dict[str, str | int | float] = {
+            "uptime": "01:23:45",
+            "cpu_temp": 45.5,
+            "cpu_usage": 32.1,
+        }
+
         data = ZowietekData(
             system=system,
             video=video,
             audio=audio,
             stream=stream,
             network=network,
+            dashboard=dashboard,
         )
 
         assert data.system["device_name"] == "ZowieBox-Test"
@@ -359,6 +371,7 @@ class TestZowietekData:
         assert data.audio["volume"] == 80
         assert data.stream["ndi_enabled"] is True
         assert data.network["ip_address"] == "192.168.1.100"
+        assert data.dashboard["uptime"] == "01:23:45"
 
     def test_zowietek_data_fields_have_correct_types(self) -> None:
         """Test that ZowietekData fields have the correct type annotations.

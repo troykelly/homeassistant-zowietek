@@ -85,10 +85,58 @@ def mock_input_signal() -> dict[str, str | int]:
     return {
         "status": "00000",
         "rsp": "succeed",
-        "signal": 1,
+        "hdmi_signal": 1,
+        "audio_signal": 48000,
         "width": 1920,
         "height": 1080,
-        "fps": 60,
+        "framerate": 60,
+        "desc": "1080p60",
+    }
+
+
+@pytest.fixture
+def mock_venc_info() -> dict[str, list[dict[str, str | int | dict[str, str | int | list[str]]]]]:
+    """Return mock video encoder info response."""
+    return {
+        "venc": [
+            {
+                "venc_chnid": 0,
+                "codec": {
+                    "selected_id": 0,
+                    "codec_list": ["H.264", "H.265", "MJPEG"],
+                },
+                "bitrate": 12000000,
+                "width": 1920,
+                "height": 1080,
+                "framerate": 60,
+                "desc": "main",
+            },
+            {
+                "venc_chnid": 1,
+                "codec": {
+                    "selected_id": 0,
+                    "codec_list": ["H.264", "H.265"],
+                },
+                "bitrate": 1000000,
+                "width": 1280,
+                "height": 720,
+                "framerate": 30,
+                "desc": "sub",
+            },
+        ],
+    }
+
+
+@pytest.fixture
+def mock_audio_info() -> dict[str, str | int | dict[str, str | int | list[str]]]:
+    """Return mock audio info response."""
+    return {
+        "switch": 1,
+        "ai_type": {
+            "selected_id": 0,
+            "ai_type_list": ["LINE IN", "Internal MIC", "HDMI IN", "USB IN"],
+        },
+        "volume": 100,
     }
 
 
@@ -128,8 +176,11 @@ def mock_ndi_config() -> dict[str, str | int]:
     return {
         "status": "00000",
         "rsp": "succeed",
+        "activate": 1,
         "switch": 1,
-        "ndi_name": "ZowieBox-Test",
+        "mode_id": 1,
+        "machinename": "ZowieBox-Test",
+        "groups": "Public",
     }
 
 
@@ -141,6 +192,8 @@ def mock_zowietek_client(
     mock_output_info: dict[str, str | int],
     mock_stream_publish_info: dict[str, list[dict[str, str | int]]],
     mock_ndi_config: dict[str, str | int],
+    mock_venc_info: dict[str, list[dict[str, str | int | dict[str, str | int | list[str]]]]],
+    mock_audio_info: dict[str, str | int | dict[str, str | int | list[str]]],
 ) -> Generator[MagicMock]:
     """Mock ZowietekClient for coordinator testing."""
     with patch(
@@ -153,6 +206,8 @@ def mock_zowietek_client(
         client.async_get_output_info = AsyncMock(return_value=mock_output_info)
         client.async_get_stream_publish_info = AsyncMock(return_value=mock_stream_publish_info)
         client.async_get_ndi_config = AsyncMock(return_value=mock_ndi_config)
+        client.async_get_venc_info = AsyncMock(return_value=mock_venc_info)
+        client.async_get_audio_info = AsyncMock(return_value=mock_audio_info)
         client.close = AsyncMock()
         client.host = "http://192.168.1.100"
         yield client
@@ -206,12 +261,14 @@ class TestZowietekCoordinatorUpdate:
         await _refresh_coordinator(coordinator)
 
         # Verify all API methods were called
-        mock_zowietek_client.async_get_device_info.assert_called_once()
-        mock_zowietek_client.async_get_video_info.assert_called_once()
+        # Note: async_get_device_info is no longer used (endpoint unavailable)
+        # System data comes from NDI config's machinename instead
         mock_zowietek_client.async_get_input_signal.assert_called_once()
         mock_zowietek_client.async_get_output_info.assert_called_once()
+        mock_zowietek_client.async_get_venc_info.assert_called_once()
         mock_zowietek_client.async_get_stream_publish_info.assert_called_once()
         mock_zowietek_client.async_get_ndi_config.assert_called_once()
+        mock_zowietek_client.async_get_audio_info.assert_called_once()
 
     async def test_update_returns_zowietek_data(
         self,
@@ -234,13 +291,20 @@ class TestZowietekCoordinatorUpdate:
         mock_zowietek_client: MagicMock,
         mock_device_info: dict[str, str],
     ) -> None:
-        """Test coordinator populates system info from device."""
+        """Test coordinator populates system info from NDI machinename.
+
+        System info is built from NDI config's machinename since the
+        device info endpoint is not available on all firmware.
+        """
         mock_config_entry.add_to_hass(hass)
 
         coordinator = ZowietekCoordinator(hass, mock_config_entry)
         await _refresh_coordinator(coordinator)
 
-        assert coordinator.data.system["devicesn"] == "zowiebox-test-12345"
+        # With machinename "ZowieBox-Test", system gets:
+        # devicename = "ZowieBox-Test" (full machinename)
+        # devicesn = "Test" (part after the dash)
+        assert coordinator.data.system["devicesn"] == "Test"
         assert coordinator.data.system["devicename"] == "ZowieBox-Test"
 
     async def test_update_populates_video_info(
@@ -270,7 +334,7 @@ class TestZowietekCoordinatorUpdate:
         coordinator = ZowietekCoordinator(hass, mock_config_entry)
         await _refresh_coordinator(coordinator)
 
-        assert coordinator.data.stream["switch"] == 1
+        assert coordinator.data.stream["ndi_switch"] == 1
         assert coordinator.data.stream["ndi_name"] == "ZowieBox-Test"
 
 
@@ -285,12 +349,12 @@ class TestZowietekCoordinatorErrors:
     ) -> None:
         """Test authentication error triggers ConfigEntryAuthFailed.
 
-        Auth errors should always be raised, even from optional endpoints.
+        Auth errors should always be raised from required endpoints.
         """
         mock_config_entry.add_to_hass(hass)
 
-        # Auth error on optional endpoint should still raise ConfigEntryAuthFailed
-        mock_zowietek_client.async_get_device_info.side_effect = ZowietekAuthError(
+        # Auth error on required endpoint should raise ConfigEntryAuthFailed
+        mock_zowietek_client.async_get_input_signal.side_effect = ZowietekAuthError(
             "Authentication failed"
         )
 
@@ -327,7 +391,7 @@ class TestZowietekCoordinatorErrors:
         # Should still succeed with empty system/ndi data
         assert isinstance(coordinator.data, ZowietekData)
         assert coordinator.data.system == {}  # Optional endpoint failed
-        assert "switch" not in coordinator.data.stream  # NDI not available
+        assert "ndi_switch" not in coordinator.data.stream  # NDI not available
 
     async def test_optional_endpoint_non_dict_returns_empty(
         self,
@@ -358,8 +422,8 @@ class TestZowietekCoordinatorErrors:
         """Test connection error on required endpoint raises UpdateFailed."""
         mock_config_entry.add_to_hass(hass)
 
-        # Video info is required - connection error should raise UpdateFailed
-        mock_zowietek_client.async_get_video_info.side_effect = ZowietekConnectionError(
+        # Venc info is required - connection error should raise UpdateFailed
+        mock_zowietek_client.async_get_venc_info.side_effect = ZowietekConnectionError(
             "Connection failed"
         )
 
@@ -390,15 +454,15 @@ class TestZowietekCoordinatorErrors:
         hass: HomeAssistant,
         mock_config_entry: MockConfigEntry,
         mock_zowietek_client: MagicMock,
-        mock_device_info: dict[str, str],
+        mock_input_signal: dict[str, str | int],
     ) -> None:
-        """Test partial API failure (e.g., video endpoint fails) raises UpdateFailed."""
+        """Test partial API failure (e.g., venc endpoint fails) raises UpdateFailed."""
         mock_config_entry.add_to_hass(hass)
 
-        # Device info succeeds but video info fails
-        mock_zowietek_client.async_get_device_info.return_value = mock_device_info
-        mock_zowietek_client.async_get_video_info.side_effect = ZowietekApiError(
-            "Video endpoint failed"
+        # Input signal succeeds but venc info fails
+        mock_zowietek_client.async_get_input_signal.return_value = mock_input_signal
+        mock_zowietek_client.async_get_venc_info.side_effect = ZowietekApiError(
+            "Venc endpoint failed"
         )
 
         coordinator = ZowietekCoordinator(hass, mock_config_entry)
@@ -415,18 +479,18 @@ class TestZowietekCoordinatorRecovery:
         hass: HomeAssistant,
         mock_config_entry: MockConfigEntry,
         mock_zowietek_client: MagicMock,
-        mock_device_info: dict[str, str],
-        mock_video_info: dict[str, str | int],
         mock_input_signal: dict[str, str | int],
         mock_output_info: dict[str, str | int],
+        mock_venc_info: dict[str, list[dict[str, str | int | dict[str, str | int | list[str]]]]],
         mock_stream_publish_info: dict[str, list[dict[str, str | int]]],
         mock_ndi_config: dict[str, str | int],
+        mock_audio_info: dict[str, str | int | dict[str, str | int | list[str]]],
     ) -> None:
         """Test coordinator recovers after connection is restored."""
         mock_config_entry.add_to_hass(hass)
 
-        # First call fails on required endpoint (video_info)
-        mock_zowietek_client.async_get_video_info.side_effect = ZowietekConnectionError(
+        # First call fails on required endpoint (venc_info)
+        mock_zowietek_client.async_get_venc_info.side_effect = ZowietekConnectionError(
             "Connection failed"
         )
 
@@ -436,13 +500,13 @@ class TestZowietekCoordinatorRecovery:
             await _refresh_coordinator(coordinator)
 
         # Restore connection
-        mock_zowietek_client.async_get_video_info.side_effect = None
-        mock_zowietek_client.async_get_device_info.return_value = mock_device_info
-        mock_zowietek_client.async_get_video_info.return_value = mock_video_info
+        mock_zowietek_client.async_get_venc_info.side_effect = None
         mock_zowietek_client.async_get_input_signal.return_value = mock_input_signal
         mock_zowietek_client.async_get_output_info.return_value = mock_output_info
+        mock_zowietek_client.async_get_venc_info.return_value = mock_venc_info
         mock_zowietek_client.async_get_stream_publish_info.return_value = mock_stream_publish_info
         mock_zowietek_client.async_get_ndi_config.return_value = mock_ndi_config
+        mock_zowietek_client.async_get_audio_info.return_value = mock_audio_info
 
         # Second refresh should succeed
         await _refresh_coordinator(coordinator)
@@ -499,13 +563,17 @@ class TestZowietekCoordinatorDeviceInfo:
         mock_config_entry: MockConfigEntry,
         mock_zowietek_client: MagicMock,
     ) -> None:
-        """Test coordinator exposes device_id property."""
+        """Test coordinator exposes device_id property.
+
+        Device ID is extracted from NDI machinename (part after last dash).
+        """
         mock_config_entry.add_to_hass(hass)
 
         coordinator = ZowietekCoordinator(hass, mock_config_entry)
         await _refresh_coordinator(coordinator)
 
-        assert coordinator.device_id == "zowiebox-test-12345"
+        # With machinename "ZowieBox-Test", devicesn becomes "Test"
+        assert coordinator.device_id == "Test"
 
     async def test_device_name_property(
         self,
@@ -527,20 +595,21 @@ class TestZowietekCoordinatorDeviceInfo:
         mock_config_entry: MockConfigEntry,
         mock_zowietek_client: MagicMock,
     ) -> None:
-        """Test device_id falls back to config entry unique_id if not in data."""
+        """Test device_id falls back to config entry unique_id if machinename has no dash."""
         mock_config_entry.add_to_hass(hass)
 
-        # Device info without serial number
-        mock_zowietek_client.async_get_device_info.return_value = {
+        # NDI config with machinename that has no dash (can't extract devicesn)
+        mock_zowietek_client.async_get_ndi_config.return_value = {
             "status": "00000",
             "rsp": "succeed",
-            "devicename": "ZowieBox-Test",
+            "switch": 1,
+            "machinename": "MyDevice",  # No dash, so no devicesn extracted
         }
 
         coordinator = ZowietekCoordinator(hass, mock_config_entry)
         await _refresh_coordinator(coordinator)
 
-        # Should fall back to config entry unique_id
+        # Should fall back to config entry unique_id since no devicesn from machinename
         assert coordinator.device_id == "zowiebox-test-12345"
 
     async def test_device_name_fallback_to_title(
@@ -549,18 +618,19 @@ class TestZowietekCoordinatorDeviceInfo:
         mock_config_entry: MockConfigEntry,
         mock_zowietek_client: MagicMock,
     ) -> None:
-        """Test device_name falls back to config entry title if not in data."""
+        """Test device_name falls back to config entry title if NDI config not available."""
         mock_config_entry.add_to_hass(hass)
 
-        # Device info without device name
-        mock_zowietek_client.async_get_device_info.return_value = {
+        # NDI config returns empty or no machinename
+        mock_zowietek_client.async_get_ndi_config.return_value = {
             "status": "00000",
             "rsp": "succeed",
-            "devicesn": "zowiebox-test-12345",
+            "switch": 1,
+            # No machinename field
         }
 
         coordinator = ZowietekCoordinator(hass, mock_config_entry)
         await _refresh_coordinator(coordinator)
 
-        # Should fall back to config entry title
+        # Should fall back to config entry title since no machinename
         assert coordinator.device_name == "Test ZowieBox"

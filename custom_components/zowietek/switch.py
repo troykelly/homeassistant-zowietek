@@ -107,8 +107,8 @@ class ZowietekSwitch(ZowietekEntity, SwitchEntity):
         stream_data = self.coordinator.data.stream
 
         if stream_type == "ndi":
-            # NDI API uses 'switch' field for enabled state
-            ndi_switch = stream_data.get("switch")
+            # Coordinator stores NDI switch under 'ndi_switch' key
+            ndi_switch = stream_data.get("ndi_switch")
             if ndi_switch is None:
                 return False
             # Handle both int and string values

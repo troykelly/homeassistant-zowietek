@@ -72,10 +72,46 @@ def mock_input_signal() -> dict[str, str | int]:
     return {
         "status": "00000",
         "rsp": "succeed",
-        "signal": 1,
+        "hdmi_signal": 1,
+        "audio_signal": 48000,
         "width": 1920,
         "height": 1080,
-        "fps": 60,
+        "framerate": 60,
+        "desc": "1080p60",
+    }
+
+
+@pytest.fixture
+def mock_venc_info() -> dict[str, list[dict[str, str | int | dict[str, str | int | list[str]]]]]:
+    """Return mock video encoder info response."""
+    return {
+        "venc": [
+            {
+                "venc_chnid": 0,
+                "codec": {
+                    "selected_id": 0,
+                    "codec_list": ["H.264", "H.265", "MJPEG"],
+                },
+                "bitrate": 12000000,
+                "width": 1920,
+                "height": 1080,
+                "framerate": 60,
+                "desc": "main",
+            },
+        ],
+    }
+
+
+@pytest.fixture
+def mock_audio_info() -> dict[str, str | int | dict[str, str | int | list[str]]]:
+    """Return mock audio info response."""
+    return {
+        "switch": 1,
+        "ai_type": {
+            "selected_id": 0,
+            "ai_type_list": ["LINE IN", "Internal MIC", "HDMI IN", "USB IN"],
+        },
+        "volume": 100,
     }
 
 
@@ -110,8 +146,11 @@ def mock_ndi_config() -> dict[str, str | int]:
     return {
         "status": "00000",
         "rsp": "succeed",
+        "activate": 1,
         "switch": 1,
-        "ndi_name": "ZowieBox-Test",
+        "mode_id": 1,
+        "machinename": "ZowieBox-Test",
+        "groups": "Public",
     }
 
 
@@ -123,6 +162,8 @@ def mock_zowietek_client(
     mock_output_info: dict[str, str | int],
     mock_stream_publish_info: dict[str, list[dict[str, str | int]]],
     mock_ndi_config: dict[str, str | int],
+    mock_venc_info: dict[str, list[dict[str, str | int | dict[str, str | int | list[str]]]]],
+    mock_audio_info: dict[str, str | int | dict[str, str | int | list[str]]],
 ) -> Generator[MagicMock]:
     """Mock ZowietekClient for integration testing."""
     with patch(
@@ -135,6 +176,8 @@ def mock_zowietek_client(
         client.async_get_output_info = AsyncMock(return_value=mock_output_info)
         client.async_get_stream_publish_info = AsyncMock(return_value=mock_stream_publish_info)
         client.async_get_ndi_config = AsyncMock(return_value=mock_ndi_config)
+        client.async_get_venc_info = AsyncMock(return_value=mock_venc_info)
+        client.async_get_audio_info = AsyncMock(return_value=mock_audio_info)
         client.close = AsyncMock()
         client.host = "http://192.168.1.100"
         yield client
@@ -185,7 +228,7 @@ class TestAsyncSetupEntry:
         await hass.async_block_till_done()
 
         # Verify API was called during first refresh
-        mock_zowietek_client.async_get_video_info.assert_called()
+        mock_zowietek_client.async_get_venc_info.assert_called()
 
     async def test_setup_entry_coordinator_has_data(
         self,
@@ -201,7 +244,8 @@ class TestAsyncSetupEntry:
 
         coordinator = mock_config_entry.runtime_data
         assert coordinator.data is not None
-        assert coordinator.data.system.get("devicesn") == "zowiebox-test-12345"
+        # System data comes from NDI config machinename: "ZowieBox-Test" -> devicesn: "Test"
+        assert coordinator.data.system.get("devicesn") == "Test"
 
     async def test_setup_entry_setup_retry_on_auth_error(
         self,
@@ -212,8 +256,8 @@ class TestAsyncSetupEntry:
         """Test setup triggers setup_retry on authentication error."""
         mock_config_entry.add_to_hass(hass)
 
-        # Simulate auth error during first refresh
-        mock_zowietek_client.async_get_video_info.side_effect = ZowietekAuthError(
+        # Simulate auth error during first refresh (venc_info is a required endpoint)
+        mock_zowietek_client.async_get_venc_info.side_effect = ZowietekAuthError(
             "Authentication failed"
         )
 
@@ -231,8 +275,8 @@ class TestAsyncSetupEntry:
         """Test setup triggers setup_retry on connection error."""
         mock_config_entry.add_to_hass(hass)
 
-        # Simulate connection error during first refresh
-        mock_zowietek_client.async_get_video_info.side_effect = ZowietekConnectionError(
+        # Simulate connection error during first refresh (venc_info is a required endpoint)
+        mock_zowietek_client.async_get_venc_info.side_effect = ZowietekConnectionError(
             "Connection failed"
         )
 

@@ -120,18 +120,94 @@ def add_coordinator_mocks(client: MagicMock) -> None:
     Args:
         client: The mock client to add methods to.
     """
-    # System info methods
-    client.async_get_system_info = AsyncMock(
+    # Input signal from /video group=hdmi opt=get_input_info
+    client.async_get_input_signal = AsyncMock(
         return_value={
-            "status": "00000",
-            "rsp": "succeed",
-            "devicename": "ZowieBox-Test",
-            "devicesn": "zowiebox-test-12345",
-            "softver": "1.0.0",
+            "hdmi_signal": 1,
+            "audio_signal": 48000,
+            "width": 1920,
+            "height": 1080,
+            "framerate": 60,
+            "desc": "1080p60",
         }
     )
 
-    # Video methods
+    # Output info from /video group=hdmi opt=get_output_info
+    client.async_get_output_info = AsyncMock(
+        return_value={
+            "switch": 1,
+            "format": "1080p60",
+            "audio_switch": 1,
+            "loop_out_switch": 0,
+        }
+    )
+
+    # Venc info from /video group=venc
+    client.async_get_venc_info = AsyncMock(
+        return_value={
+            "venc": [
+                {
+                    "venc_chnid": 0,
+                    "codec": {
+                        "selected_id": 0,
+                        "codec_list": ["H.264", "H.265", "MJPEG"],
+                    },
+                    "bitrate": 12000000,
+                    "width": 1920,
+                    "height": 1080,
+                    "framerate": 60,
+                    "desc": "main",
+                },
+                {
+                    "venc_chnid": 1,
+                    "codec": {
+                        "selected_id": 0,
+                        "codec_list": ["H.264", "H.265", "MJPEG"],
+                    },
+                    "bitrate": 1000000,
+                    "width": 1280,
+                    "height": 720,
+                    "framerate": 60,
+                    "desc": "sub",
+                },
+            ],
+        }
+    )
+
+    # Stream publish info from /stream group=publish
+    client.async_get_stream_publish_info = AsyncMock(
+        return_value={
+            "publish": [
+                {"type": "rtmp", "index": 0, "switch": 1, "url": "rtmp://test"},
+                {"type": "srt", "index": 1, "switch": 0, "url": ""},
+            ],
+        }
+    )
+
+    # NDI config from /video group=ndi
+    client.async_get_ndi_config = AsyncMock(
+        return_value={
+            "activate": 1,
+            "switch": 1,
+            "mode_id": 1,
+            "machinename": "ZowieBox-Test",
+            "groups": "Public",
+        }
+    )
+
+    # Audio info from /audio group=all
+    client.async_get_audio_info = AsyncMock(
+        return_value={
+            "switch": 1,
+            "ai_type": {
+                "selected_id": 0,
+                "ai_type_list": ["LINE IN", "Internal MIC", "HDMI IN", "USB IN"],
+            },
+            "volume": 100,
+        }
+    )
+
+    # Legacy methods (for backward compatibility with some tests)
     client.async_get_video_info = AsyncMock(
         return_value={
             "status": "00000",
@@ -139,30 +215,6 @@ def add_coordinator_mocks(client: MagicMock) -> None:
             "input_source": "hdmi",
             "input_resolution": "1920x1080",
             "input_fps": "60",
-        }
-    )
-
-    # Audio methods
-    client.async_get_audio_info = AsyncMock(
-        return_value={
-            "status": "00000",
-            "rsp": "succeed",
-            "audio_source": "hdmi",
-            "volume": "80",
-        }
-    )
-
-    # Stream methods
-    client.async_get_stream_info = AsyncMock(
-        return_value={
-            "status": "00000",
-            "rsp": "succeed",
-            "switch": 1,  # NDI enabled state
-            "machinename": "ZowieBox-Test",
-            "publish": [
-                {"type": "rtmp", "index": 0, "switch": 0, "url": ""},
-                {"type": "srt", "index": 1, "switch": 0, "url": ""},
-            ],
         }
     )
 
@@ -265,30 +317,48 @@ def create_mock_coordinator(
     Returns:
         A MagicMock configured as a coordinator.
     """
+    from custom_components.zowietek.models import ZowietekData
+
     coordinator = MagicMock()
     coordinator.device_id = device_id
     coordinator.device_name = device_name
     coordinator.async_config_entry_first_refresh = AsyncMock()
-    coordinator.data = {
-        "system": {
+    coordinator.data = ZowietekData(
+        system={
             "devicename": device_name,
             "devicesn": device_id,
-            "softver": "1.0.0",
         },
-        "video": {
-            "input_source": "hdmi",
-            "input_resolution": "1920x1080",
-            "input_fps": "60",
+        video={
+            "input": {
+                "hdmi_signal": 1,
+                "width": 1920,
+                "height": 1080,
+                "framerate": 60,
+            },
+            "output": {
+                "format": "1080p60",
+            },
+            "enc_resolution": "1920x1080",
+            "enc_framerate": 60,
+            "enc_bitrate": 12000000,
+            "enc_type": "H.264",
+            "output_format": "1080p60",
         },
-        "stream": {
-            "switch": 1,  # NDI enabled state
-            "machinename": device_name,
+        audio={
+            "switch": 1,
+            "volume": 100,
+        },
+        stream={
+            "ndi_switch": 1,
+            "ndi_name": device_name,
+            "ndi_mode_id": 1,
             "publish": [
-                {"type": "rtmp", "index": 0, "switch": 0, "url": ""},
+                {"type": "rtmp", "index": 0, "switch": 1, "url": "rtmp://test"},
                 {"type": "srt", "index": 1, "switch": 0, "url": ""},
             ],
         },
-    }
+        network={},
+    )
     coordinator.last_update_success = True
     return coordinator
 

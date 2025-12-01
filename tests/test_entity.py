@@ -67,10 +67,46 @@ def mock_input_signal() -> dict[str, str | int]:
     return {
         "status": "00000",
         "rsp": "succeed",
-        "signal": 1,
+        "hdmi_signal": 1,
+        "audio_signal": 48000,
         "width": 1920,
         "height": 1080,
-        "fps": 60,
+        "framerate": 60,
+        "desc": "1080p60",
+    }
+
+
+@pytest.fixture
+def mock_venc_info() -> dict[str, list[dict[str, str | int | dict[str, str | int | list[str]]]]]:
+    """Return mock video encoder info response."""
+    return {
+        "venc": [
+            {
+                "venc_chnid": 0,
+                "codec": {
+                    "selected_id": 0,
+                    "codec_list": ["H.264", "H.265", "MJPEG"],
+                },
+                "bitrate": 12000000,
+                "width": 1920,
+                "height": 1080,
+                "framerate": 60,
+                "desc": "main",
+            },
+        ],
+    }
+
+
+@pytest.fixture
+def mock_audio_info() -> dict[str, str | int | dict[str, str | int | list[str]]]:
+    """Return mock audio info response."""
+    return {
+        "switch": 1,
+        "ai_type": {
+            "selected_id": 0,
+            "ai_type_list": ["LINE IN", "Internal MIC", "HDMI IN", "USB IN"],
+        },
+        "volume": 100,
     }
 
 
@@ -105,8 +141,11 @@ def mock_ndi_config() -> dict[str, str | int]:
     return {
         "status": "00000",
         "rsp": "succeed",
+        "activate": 1,
         "switch": 1,
-        "ndi_name": "ZowieBox-Test",
+        "mode_id": 1,
+        "machinename": "ZowieBox-Test",
+        "groups": "Public",
     }
 
 
@@ -118,6 +157,8 @@ def mock_zowietek_client(
     mock_output_info: dict[str, str | int],
     mock_stream_publish_info: dict[str, list[dict[str, str | int]]],
     mock_ndi_config: dict[str, str | int],
+    mock_venc_info: dict[str, list[dict[str, str | int | dict[str, str | int | list[str]]]]],
+    mock_audio_info: dict[str, str | int | dict[str, str | int | list[str]]],
 ) -> Generator[MagicMock]:
     """Mock ZowietekClient for entity testing."""
     with patch(
@@ -130,6 +171,8 @@ def mock_zowietek_client(
         client.async_get_output_info = AsyncMock(return_value=mock_output_info)
         client.async_get_stream_publish_info = AsyncMock(return_value=mock_stream_publish_info)
         client.async_get_ndi_config = AsyncMock(return_value=mock_ndi_config)
+        client.async_get_venc_info = AsyncMock(return_value=mock_venc_info)
+        client.async_get_audio_info = AsyncMock(return_value=mock_audio_info)
         client.close = AsyncMock()
         client.host = "http://192.168.1.100"
         yield client
@@ -277,18 +320,12 @@ class TestZowietekEntityDeviceInfo:
         mock_config_entry: MockConfigEntry,
         mock_zowietek_client: MagicMock,
     ) -> None:
-        """Test device_info model comes from API response."""
-        mock_config_entry.add_to_hass(hass)
+        """Test device_info model defaults to ZowieBox.
 
-        # Set model in device info
-        mock_zowietek_client.async_get_device_info.return_value = {
-            "status": "00000",
-            "rsp": "succeed",
-            "devicesn": "zowiebox-test-12345",
-            "devicename": "ZowieBox-Test",
-            "model": "ZowieBox-4K",
-            "softver": "1.0.0",
-        }
+        Since the device info endpoint is not available on all firmware,
+        model info is not retrieved from the API and defaults to 'ZowieBox'.
+        """
+        mock_config_entry.add_to_hass(hass)
 
         coordinator = ZowietekCoordinator(hass, mock_config_entry)
         await _refresh_coordinator(coordinator)
@@ -296,7 +333,8 @@ class TestZowietekEntityDeviceInfo:
         entity = ZowietekEntity(coordinator, "test_sensor")
         device_info = entity.device_info
 
-        assert device_info["model"] == "ZowieBox-4K"
+        # Model defaults to ZowieBox since device info endpoint not used
+        assert device_info["model"] == "ZowieBox"
 
     async def test_device_info_model_fallback(
         self,
@@ -330,7 +368,7 @@ class TestZowietekEntityDeviceInfo:
         mock_config_entry: MockConfigEntry,
         mock_zowietek_client: MagicMock,
     ) -> None:
-        """Test device_info name comes from API devicename."""
+        """Test device_info name comes from NDI machinename."""
         mock_config_entry.add_to_hass(hass)
 
         coordinator = ZowietekCoordinator(hass, mock_config_entry)
@@ -339,6 +377,7 @@ class TestZowietekEntityDeviceInfo:
         entity = ZowietekEntity(coordinator, "test_sensor")
         device_info = entity.device_info
 
+        # Name comes from NDI config machinename
         assert device_info["name"] == "ZowieBox-Test"
 
     async def test_device_info_name_fallback(
@@ -347,15 +386,15 @@ class TestZowietekEntityDeviceInfo:
         mock_config_entry: MockConfigEntry,
         mock_zowietek_client: MagicMock,
     ) -> None:
-        """Test device_info name falls back to config entry title."""
+        """Test device_info name falls back to config entry title when machinename missing."""
         mock_config_entry.add_to_hass(hass)
 
-        # Device info without devicename
-        mock_zowietek_client.async_get_device_info.return_value = {
+        # NDI config without machinename
+        mock_zowietek_client.async_get_ndi_config.return_value = {
             "status": "00000",
             "rsp": "succeed",
-            "devicesn": "zowiebox-test-12345",
-            "softver": "1.0.0",
+            "switch": 1,
+            # No machinename field
         }
 
         coordinator = ZowietekCoordinator(hass, mock_config_entry)
@@ -373,7 +412,11 @@ class TestZowietekEntityDeviceInfo:
         mock_config_entry: MockConfigEntry,
         mock_zowietek_client: MagicMock,
     ) -> None:
-        """Test device_info sw_version comes from API softver."""
+        """Test device_info sw_version is None when device info not available.
+
+        Since the device info endpoint is not available on all firmware,
+        software version is not available and should be None.
+        """
         mock_config_entry.add_to_hass(hass)
 
         coordinator = ZowietekCoordinator(hass, mock_config_entry)
@@ -382,7 +425,8 @@ class TestZowietekEntityDeviceInfo:
         entity = ZowietekEntity(coordinator, "test_sensor")
         device_info = entity.device_info
 
-        assert device_info["sw_version"] == "1.0.0"
+        # sw_version is None since device info endpoint not used
+        assert device_info.get("sw_version") is None
 
     async def test_device_info_sw_version_none_when_missing(
         self,

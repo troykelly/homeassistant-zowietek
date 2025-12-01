@@ -152,23 +152,20 @@ class ZowietekBinarySensor(ZowietekEntity, BinarySensorEntity):
     def _has_video_input(self) -> bool:
         """Check if video input signal is detected.
 
-        Supports both 'signal' and 'hdmi_signal' keys as different firmware
-        versions may use different key names.
+        Supports both 'input_signal' and 'input_hdmi_signal' keys as different
+        firmware versions may use different key names. The coordinator flattens
+        the input signal data from the API into video_data.
 
         Returns:
             True if video input signal is detected.
         """
         video_data = self.coordinator.data.video
-        input_data = video_data.get("input")
 
-        if not isinstance(input_data, dict):
-            return False
-
-        # Try 'signal' first, then fall back to 'hdmi_signal' for compatibility
-        # with different firmware versions
-        signal = input_data.get("signal")
+        # Try 'input_signal' first, then fall back to 'input_hdmi_signal'
+        # for compatibility with different firmware versions
+        signal = video_data.get("input_signal")
         if signal is None:
-            signal = input_data.get("hdmi_signal")
+            signal = video_data.get("input_hdmi_signal")
 
         if signal is None:
             return False
@@ -179,14 +176,14 @@ class ZowietekBinarySensor(ZowietekEntity, BinarySensorEntity):
     def _is_ndi_enabled(self) -> bool:
         """Check if NDI streaming is enabled.
 
-        The NDI API returns 'switch' field for the enabled state.
+        The coordinator stores NDI switch under 'ndi_switch' key.
 
         Returns:
             True if NDI is enabled.
         """
         stream_data = self.coordinator.data.stream
-        # NDI API uses 'switch' field for enabled state
-        ndi_switch = stream_data.get("switch")
+        # Coordinator stores NDI switch under 'ndi_switch' key
+        ndi_switch = stream_data.get("ndi_switch")
 
         if ndi_switch is None:
             return False

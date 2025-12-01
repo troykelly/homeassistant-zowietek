@@ -46,7 +46,7 @@ def mock_device_info() -> dict[str, str]:
         "status": "00000",
         "rsp": "succeed",
         "devicesn": "zowiebox-test-12345",
-        "devicename": "ZowieBox-Test",
+        "devicename": "ZowieBox-Studio",
         "softver": "1.2.3",
         "hardver": "2.0",
         "mac": "00:11:22:33:44:55",
@@ -75,10 +75,58 @@ def mock_input_signal() -> dict[str, str | int]:
     return {
         "status": "00000",
         "rsp": "succeed",
-        "signal": 1,
+        "hdmi_signal": 1,
+        "audio_signal": 48000,
         "width": 1920,
         "height": 1080,
-        "fps": 60,
+        "framerate": 60,
+        "desc": "1080p60",
+    }
+
+
+@pytest.fixture
+def mock_venc_info() -> dict[str, list[dict[str, str | int | dict[str, str | int | list[str]]]]]:
+    """Return mock video encoder info response."""
+    return {
+        "venc": [
+            {
+                "venc_chnid": 0,
+                "codec": {
+                    "selected_id": 0,
+                    "codec_list": ["H.264", "H.265", "MJPEG"],
+                },
+                "bitrate": 12000000,
+                "width": 1920,
+                "height": 1080,
+                "framerate": 60,
+                "desc": "main",
+            },
+            {
+                "venc_chnid": 1,
+                "codec": {
+                    "selected_id": 0,
+                    "codec_list": ["H.264", "H.265"],
+                },
+                "bitrate": 1000000,
+                "width": 1280,
+                "height": 720,
+                "framerate": 30,
+                "desc": "sub",
+            },
+        ],
+    }
+
+
+@pytest.fixture
+def mock_audio_info() -> dict[str, str | int | dict[str, str | int | list[str]]]:
+    """Return mock audio info response."""
+    return {
+        "switch": 1,
+        "ai_type": {
+            "selected_id": 0,
+            "ai_type_list": ["LINE IN", "Internal MIC", "HDMI IN", "USB IN"],
+        },
+        "volume": 100,
     }
 
 
@@ -118,8 +166,11 @@ def mock_ndi_config() -> dict[str, str | int]:
     return {
         "status": "00000",
         "rsp": "succeed",
+        "activate": 1,
         "switch": 1,
-        "ndi_name": "ZowieBox-Studio",
+        "mode_id": 1,
+        "machinename": "ZowieBox-Studio",
+        "groups": "Public",
     }
 
 
@@ -131,6 +182,8 @@ def mock_zowietek_client(
     mock_output_info: dict[str, str | int],
     mock_stream_publish_info: dict[str, list[dict[str, str | int]]],
     mock_ndi_config: dict[str, str | int],
+    mock_venc_info: dict[str, list[dict[str, str | int | dict[str, str | int | list[str]]]]],
+    mock_audio_info: dict[str, str | int | dict[str, str | int | list[str]]],
 ) -> Generator[MagicMock]:
     """Mock ZowietekClient for switch testing."""
     with patch(
@@ -143,6 +196,8 @@ def mock_zowietek_client(
         client.async_get_output_info = AsyncMock(return_value=mock_output_info)
         client.async_get_stream_publish_info = AsyncMock(return_value=mock_stream_publish_info)
         client.async_get_ndi_config = AsyncMock(return_value=mock_ndi_config)
+        client.async_get_venc_info = AsyncMock(return_value=mock_venc_info)
+        client.async_get_audio_info = AsyncMock(return_value=mock_audio_info)
         client.async_set_ndi_enabled = AsyncMock()
         client.async_set_stream_enabled = AsyncMock()
         client.close = AsyncMock()
@@ -314,7 +369,7 @@ class TestZowietekSwitchState:
             "status": "00000",
             "rsp": "succeed",
             "switch": 0,
-            "ndi_name": "ZowieBox-Studio",
+            "machinename": "ZowieBox-Studio",
         }
 
         await _setup_integration(hass, mock_config_entry)
@@ -685,7 +740,7 @@ class TestSwitchSetup:
         entity_registry = er.async_get(hass)
 
         for description in SWITCH_DESCRIPTIONS:
-            entity_id = f"switch.zowiebox_test_{description.key}"
+            entity_id = f"switch.zowiebox_studio_{description.key}"
             entry = entity_registry.async_get(entity_id)
             assert entry is not None, f"Switch {entity_id} not registered"
 
@@ -699,17 +754,17 @@ class TestSwitchSetup:
         await _setup_integration(hass, mock_config_entry)
 
         # Check NDI stream state (should be on)
-        state = hass.states.get("switch.zowiebox_test_ndi_stream")
+        state = hass.states.get("switch.zowiebox_studio_ndi_stream")
         assert state is not None
         assert state.state == STATE_ON
 
         # Check RTMP stream state (should be on)
-        state = hass.states.get("switch.zowiebox_test_rtmp_stream")
+        state = hass.states.get("switch.zowiebox_studio_rtmp_stream")
         assert state is not None
         assert state.state == STATE_ON
 
         # Check SRT stream state (should be off)
-        state = hass.states.get("switch.zowiebox_test_srt_stream")
+        state = hass.states.get("switch.zowiebox_studio_srt_stream")
         assert state is not None
         assert state.state == STATE_OFF
 
@@ -858,7 +913,7 @@ class TestSwitchEdgeCases:
             "status": "00000",
             "rsp": "succeed",
             "switch": "1",
-            "ndi_name": "ZowieBox-Studio",
+            "machinename": "ZowieBox-Studio",
         }
 
         await _setup_integration(hass, mock_config_entry)
@@ -887,7 +942,7 @@ class TestSwitchEdgeCases:
             "status": "00000",
             "rsp": "succeed",
             "switch": "0",
-            "ndi_name": "ZowieBox-Studio",
+            "machinename": "ZowieBox-Studio",
         }
 
         await _setup_integration(hass, mock_config_entry)

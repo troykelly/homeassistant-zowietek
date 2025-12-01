@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -79,12 +79,12 @@ def mock_video_info() -> dict[str, str | int]:
 def mock_input_signal() -> dict[str, str | int]:
     """Return mock input signal response."""
     return {
-        "status": "00000",
-        "rsp": "succeed",
-        "signal": 1,
+        "hdmi_signal": 1,
+        "audio_signal": 48000,
         "width": 1920,
         "height": 1080,
-        "fps": 60,
+        "framerate": 60,
+        "desc": "1080p60",
     }
 
 
@@ -122,10 +122,41 @@ def mock_stream_publish_info() -> dict[str, list[dict[str, str | int]]]:
 def mock_ndi_config() -> dict[str, str | int]:
     """Return mock NDI config response."""
     return {
-        "status": "00000",
-        "rsp": "succeed",
+        "activate": 1,
         "switch": 1,
-        "ndi_name": "ZowieBox-Studio",
+        "mode_id": 1,
+        "machinename": "ZowieBox-Studio",
+        "groups": "Public",
+    }
+
+
+@pytest.fixture
+def mock_venc_info() -> dict[str, Any]:
+    """Return mock venc info response."""
+    return {
+        "venc": [
+            {
+                "venc_chnid": 0,
+                "codec": {
+                    "selected_id": 0,
+                    "codec_list": ["H.264", "H.265", "MJPEG"],
+                },
+                "bitrate": 12000000,
+                "width": 1920,
+                "height": 1080,
+                "framerate": 60,
+                "desc": "main",
+            },
+        ],
+    }
+
+
+@pytest.fixture
+def mock_audio_info() -> dict[str, Any]:
+    """Return mock audio info response."""
+    return {
+        "switch": 1,
+        "volume": 100,
     }
 
 
@@ -137,6 +168,8 @@ def mock_zowietek_client(
     mock_output_info: dict[str, str | int],
     mock_stream_publish_info: dict[str, list[dict[str, str | int]]],
     mock_ndi_config: dict[str, str | int],
+    mock_venc_info: dict[str, Any],
+    mock_audio_info: dict[str, Any],
 ) -> Generator[MagicMock]:
     """Mock ZowietekClient for binary sensor testing."""
     with patch(
@@ -149,6 +182,8 @@ def mock_zowietek_client(
         client.async_get_output_info = AsyncMock(return_value=mock_output_info)
         client.async_get_stream_publish_info = AsyncMock(return_value=mock_stream_publish_info)
         client.async_get_ndi_config = AsyncMock(return_value=mock_ndi_config)
+        client.async_get_venc_info = AsyncMock(return_value=mock_venc_info)
+        client.async_get_audio_info = AsyncMock(return_value=mock_audio_info)
         client.close = AsyncMock()
         client.host = "http://192.168.1.100"
         yield client
@@ -799,7 +834,7 @@ class TestBinarySensorSetup:
 
         # Check each binary sensor is registered
         for description in BINARY_SENSOR_DESCRIPTIONS:
-            entity_id = f"binary_sensor.zowiebox_test_{description.key}"
+            entity_id = f"binary_sensor.zowiebox_studio_{description.key}"
             entry = entity_registry.async_get(entity_id)
             assert entry is not None, f"Binary sensor {entity_id} not registered"
 
@@ -813,27 +848,27 @@ class TestBinarySensorSetup:
         await _setup_integration(hass, mock_config_entry)
 
         # Check streaming state (should be on - NDI enabled)
-        state = hass.states.get("binary_sensor.zowiebox_test_streaming")
+        state = hass.states.get("binary_sensor.zowiebox_studio_streaming")
         assert state is not None
         assert state.state == STATE_ON
 
         # Check video input state (should be on - signal=1)
-        state = hass.states.get("binary_sensor.zowiebox_test_video_input")
+        state = hass.states.get("binary_sensor.zowiebox_studio_video_input")
         assert state is not None
         assert state.state == STATE_ON
 
         # Check NDI enabled state
-        state = hass.states.get("binary_sensor.zowiebox_test_ndi_enabled")
+        state = hass.states.get("binary_sensor.zowiebox_studio_ndi_enabled")
         assert state is not None
         assert state.state == STATE_ON
 
         # Check RTMP enabled state
-        state = hass.states.get("binary_sensor.zowiebox_test_rtmp_enabled")
+        state = hass.states.get("binary_sensor.zowiebox_studio_rtmp_enabled")
         assert state is not None
         assert state.state == STATE_ON
 
         # Check SRT enabled state (should be off in default mock)
-        state = hass.states.get("binary_sensor.zowiebox_test_srt_enabled")
+        state = hass.states.get("binary_sensor.zowiebox_studio_srt_enabled")
         assert state is not None
         assert state.state == STATE_OFF
 
@@ -913,17 +948,17 @@ class TestBinarySensorEntityCategory:
         entity_registry = er.async_get(hass)
 
         # NDI enabled should be diagnostic
-        ndi_entry = entity_registry.async_get("binary_sensor.zowiebox_test_ndi_enabled")
+        ndi_entry = entity_registry.async_get("binary_sensor.zowiebox_studio_ndi_enabled")
         assert ndi_entry is not None
         assert ndi_entry.entity_category == EntityCategory.DIAGNOSTIC
 
         # RTMP enabled should be diagnostic
-        rtmp_entry = entity_registry.async_get("binary_sensor.zowiebox_test_rtmp_enabled")
+        rtmp_entry = entity_registry.async_get("binary_sensor.zowiebox_studio_rtmp_enabled")
         assert rtmp_entry is not None
         assert rtmp_entry.entity_category == EntityCategory.DIAGNOSTIC
 
         # SRT enabled should be diagnostic
-        srt_entry = entity_registry.async_get("binary_sensor.zowiebox_test_srt_enabled")
+        srt_entry = entity_registry.async_get("binary_sensor.zowiebox_studio_srt_enabled")
         assert srt_entry is not None
         assert srt_entry.entity_category == EntityCategory.DIAGNOSTIC
 
@@ -939,12 +974,12 @@ class TestBinarySensorEntityCategory:
         entity_registry = er.async_get(hass)
 
         # Streaming should not be diagnostic
-        streaming_entry = entity_registry.async_get("binary_sensor.zowiebox_test_streaming")
+        streaming_entry = entity_registry.async_get("binary_sensor.zowiebox_studio_streaming")
         assert streaming_entry is not None
         assert streaming_entry.entity_category is None
 
         # Video input should not be diagnostic
-        video_entry = entity_registry.async_get("binary_sensor.zowiebox_test_video_input")
+        video_entry = entity_registry.async_get("binary_sensor.zowiebox_studio_video_input")
         assert video_entry is not None
         assert video_entry.entity_category is None
 
@@ -961,7 +996,7 @@ class TestBinarySensorIcons:
         """Test streaming binary sensor has correct icon."""
         await _setup_integration(hass, mock_config_entry)
 
-        state = hass.states.get("binary_sensor.zowiebox_test_streaming")
+        state = hass.states.get("binary_sensor.zowiebox_studio_streaming")
         assert state is not None
         # Icon should be mdi:broadcast when on
         assert state.attributes.get("icon") == "mdi:broadcast"
@@ -975,6 +1010,6 @@ class TestBinarySensorIcons:
         """Test video input binary sensor has correct icon."""
         await _setup_integration(hass, mock_config_entry)
 
-        state = hass.states.get("binary_sensor.zowiebox_test_video_input")
+        state = hass.states.get("binary_sensor.zowiebox_studio_video_input")
         assert state is not None
         assert state.attributes.get("icon") == "mdi:video-input-hdmi"

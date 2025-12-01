@@ -585,8 +585,9 @@ class TestZowietekClientNDI:
                 "status": STATUS_SUCCESS,
                 "rsp": "succeed",
                 "data": {
-                    "ndi_name": "ZowieBox-Test",
-                    "ndi_enable": 1,
+                    "machinename": "ZowieBox-Test",
+                    "switch": 1,
+                    "mode_id": 1,
                 },
             }
         )
@@ -601,8 +602,8 @@ class TestZowietekClientNDI:
 
         result = await client.async_get_ndi_config()
 
-        assert result["ndi_name"] == "ZowieBox-Test"
-        assert result["ndi_enable"] == 1
+        assert result["machinename"] == "ZowieBox-Test"
+        assert result["switch"] == 1
 
 
 class TestZowietekClientWriteOperations:
@@ -697,7 +698,7 @@ class TestZowietekClientWriteOperations:
         mock_session.post.assert_called_once()
         call_args = mock_session.post.call_args
         json_data = call_args[1]["json"]
-        assert json_data["data"]["ndi_enable"] == 1
+        assert json_data["data"]["switch"] == 1
 
     @pytest.mark.asyncio
     async def test_async_set_ndi_enabled_false(self) -> None:
@@ -722,7 +723,7 @@ class TestZowietekClientWriteOperations:
         mock_session.post.assert_called_once()
         call_args = mock_session.post.call_args
         json_data = call_args[1]["json"]
-        assert json_data["data"]["ndi_enable"] == 0
+        assert json_data["data"]["switch"] == 0
 
     @pytest.mark.asyncio
     async def test_async_set_stream_enabled_rtmp_true(self) -> None:
@@ -733,7 +734,7 @@ class TestZowietekClientWriteOperations:
                 "status": STATUS_SUCCESS,
                 "rsp": "succeed",
                 "publish": [
-                    {"type": "rtmp", "index": 0, "enable": 0, "url": "rtmp://example.com"},
+                    {"type": "rtmp", "index": 0, "switch": 0, "url": "rtmp://example.com"},
                 ],
             }
         )
@@ -792,8 +793,8 @@ class TestZowietekClientWriteOperations:
                 "status": STATUS_SUCCESS,
                 "rsp": "succeed",
                 "publish": [
-                    {"type": "rtmp", "index": 0, "enable": 1, "url": "rtmp://example.com"},
-                    {"type": "srt", "index": 1, "enable": 1, "url": "srt://example.com"},
+                    {"type": "rtmp", "index": 0, "switch": 1, "url": "rtmp://example.com"},
+                    {"type": "srt", "index": 1, "switch": 1, "url": "srt://example.com"},
                 ],
             }
         )

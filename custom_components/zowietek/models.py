@@ -187,6 +187,38 @@ class ZowietekNdiConfig(TypedDict):
     ndi_name: NotRequired[str]
 
 
+class ZowietekSysAttr(TypedDict):
+    """System attributes from async_get_sys_attr_info API.
+
+    Contains device identification, firmware version, and serial number.
+    """
+
+    SN: NotRequired[str]
+    firmware_version: NotRequired[str]
+    hardware_version: NotRequired[str]
+    model: NotRequired[str]
+    manufacturer: NotRequired[str]
+    device_name: NotRequired[str]
+    ndi_version: NotRequired[str]
+    web_version: NotRequired[str]
+    app_version: NotRequired[str]
+    mcu_version: NotRequired[str]
+    isp_version: NotRequired[str]
+    chipid: NotRequired[str]
+
+
+class ZowietekDashboard(TypedDict):
+    """Dashboard information from async_get_dashboard_info API.
+
+    Contains uptime and system statistics.
+    """
+
+    persistent_time: NotRequired[str]
+    device_strat_time: NotRequired[str]
+    cpu_temp: NotRequired[float]
+    cpu_payload: NotRequired[float]
+
+
 @dataclass
 class ZowietekData:
     """Container for all ZowieBox device data.
@@ -201,3 +233,4 @@ class ZowietekData:
     audio: dict[str, str | int]
     stream: dict[str, str | int | list[dict[str, str | int]]]
     network: dict[str, str | int]
+    dashboard: dict[str, str | int | float]

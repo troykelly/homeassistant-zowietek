@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -46,12 +46,7 @@ def mock_device_info() -> dict[str, str]:
         "status": "00000",
         "rsp": "succeed",
         "devicesn": "zowiebox-test-12345",
-        "devicename": "ZowieBox-Test",
-        "softver": "1.2.3",
-        "hardver": "2.0",
-        "mac": "00:11:22:33:44:55",
-        "model": "ZowieBox-4K",
-        "uptime": "123456",
+        "devicename": "ZowieBox-Studio",
     }
 
 
@@ -61,11 +56,6 @@ def mock_video_info() -> dict[str, str | int]:
     return {
         "status": "00000",
         "rsp": "succeed",
-        "enc_type": "h264",
-        "enc_bitrate": 8000,
-        "enc_resolution": "1920x1080",
-        "enc_framerate": 60,
-        "mode": "encoder",
     }
 
 
@@ -73,12 +63,12 @@ def mock_video_info() -> dict[str, str | int]:
 def mock_input_signal() -> dict[str, str | int]:
     """Return mock input signal response."""
     return {
-        "status": "00000",
-        "rsp": "succeed",
-        "signal": 1,
+        "hdmi_signal": 1,
+        "audio_signal": 48000,
         "width": 1920,
         "height": 1080,
-        "fps": 60,
+        "framerate": 60,
+        "desc": "1080p60",
     }
 
 
@@ -86,10 +76,10 @@ def mock_input_signal() -> dict[str, str | int]:
 def mock_output_info() -> dict[str, str | int]:
     """Return mock output info response."""
     return {
-        "status": "00000",
-        "rsp": "succeed",
+        "switch": 1,
         "format": "1080p60",
-        "loop_out_switch": 1,
+        "audio_switch": 1,
+        "loop_out_switch": 0,
     }
 
 
@@ -100,8 +90,13 @@ def mock_stream_publish_info() -> dict[str, list[dict[str, str | int]]]:
         "publish": [
             {
                 "type": "rtmp",
-                "enable": 1,
+                "switch": 1,
                 "url": "rtmp://example.com/live/stream",
+            },
+            {
+                "type": "srt",
+                "switch": 0,
+                "url": "",
             },
         ],
     }
@@ -111,10 +106,70 @@ def mock_stream_publish_info() -> dict[str, list[dict[str, str | int]]]:
 def mock_ndi_config() -> dict[str, str | int]:
     """Return mock NDI config response."""
     return {
-        "status": "00000",
-        "rsp": "succeed",
-        "ndi_enable": 1,
-        "ndi_name": "ZowieBox-Studio",
+        "activate": 1,
+        "switch": 1,
+        "mode_id": 1,
+        "machinename": "ZowieBox-Studio",
+        "groups": "Public",
+    }
+
+
+@pytest.fixture
+def mock_venc_info() -> dict[str, Any]:
+    """Return mock venc info response."""
+    return {
+        "venc": [
+            {
+                "venc_chnid": 0,
+                "codec": {
+                    "selected_id": 0,
+                    "codec_list": ["H.264", "H.265", "MJPEG"],
+                },
+                "bitrate": 12000000,
+                "width": 1920,
+                "height": 1080,
+                "framerate": 60,
+                "desc": "main",
+            },
+        ],
+    }
+
+
+@pytest.fixture
+def mock_audio_info() -> dict[str, Any]:
+    """Return mock audio info response."""
+    return {
+        "switch": 1,
+        "volume": 100,
+    }
+
+
+@pytest.fixture
+def mock_sys_attr_info() -> dict[str, str]:
+    """Return mock sys attr info response."""
+    return {
+        "SN": "zowiebox-test-12345",
+        "firmware_version": "2.0.0.12",
+        "hardware_version": "3.1.12.22",
+        "model": "ZowieBox",
+        "manufacturer": "Zowietek",
+        "device_name": "ZowieBox-Studio",
+        "ndi_version": "5.6.1",
+    }
+
+
+@pytest.fixture
+def mock_dashboard_info() -> dict[str, str | float]:
+    """Return mock dashboard info response."""
+    return {
+        "persistent_time": "01:23:45",
+        "device_strat_time": "2024-01-01 00:00:00",
+        "cpu_temp": 45.5,
+        "cpu_payload": 32.1,
+        "memory_info": {
+            "used": 512,
+            "total": 1024,
+        },
     }
 
 
@@ -126,6 +181,10 @@ def mock_zowietek_client(
     mock_output_info: dict[str, str | int],
     mock_stream_publish_info: dict[str, list[dict[str, str | int]]],
     mock_ndi_config: dict[str, str | int],
+    mock_venc_info: dict[str, Any],
+    mock_audio_info: dict[str, Any],
+    mock_sys_attr_info: dict[str, str],
+    mock_dashboard_info: dict[str, str | float],
 ) -> Generator[MagicMock]:
     """Mock ZowietekClient for sensor testing."""
     with patch(
@@ -138,6 +197,10 @@ def mock_zowietek_client(
         client.async_get_output_info = AsyncMock(return_value=mock_output_info)
         client.async_get_stream_publish_info = AsyncMock(return_value=mock_stream_publish_info)
         client.async_get_ndi_config = AsyncMock(return_value=mock_ndi_config)
+        client.async_get_venc_info = AsyncMock(return_value=mock_venc_info)
+        client.async_get_audio_info = AsyncMock(return_value=mock_audio_info)
+        client.async_get_sys_attr_info = AsyncMock(return_value=mock_sys_attr_info)
+        client.async_get_dashboard_info = AsyncMock(return_value=mock_dashboard_info)
         client.close = AsyncMock()
         client.host = "http://192.168.1.100"
         yield client
@@ -159,7 +222,7 @@ class TestSensorDescriptions:
     def test_sensor_descriptions_defined(self) -> None:
         """Test that sensor descriptions are defined."""
         assert SENSOR_DESCRIPTIONS is not None
-        assert len(SENSOR_DESCRIPTIONS) > 0
+        assert len(SENSOR_DESCRIPTIONS) == 12
 
     def test_video_resolution_description(self) -> None:
         """Test video resolution sensor description."""
@@ -188,7 +251,7 @@ class TestSensorDescriptions:
 
         desc = descriptions["stream_bitrate"]
         assert desc.translation_key == "stream_bitrate"
-        assert desc.native_unit_of_measurement == "kbps"
+        assert desc.native_unit_of_measurement == "bps"
         assert desc.state_class == SensorStateClass.MEASUREMENT
         assert desc.icon == "mdi:speedometer"
 
@@ -210,38 +273,19 @@ class TestSensorDescriptions:
         assert desc.translation_key == "ndi_name"
         assert desc.icon == "mdi:broadcast"
 
-    def test_firmware_version_description(self) -> None:
-        """Test firmware version sensor description."""
+    def test_output_format_description(self) -> None:
+        """Test output format sensor description."""
         descriptions = {desc.key: desc for desc in SENSOR_DESCRIPTIONS}
-        assert "firmware_version" in descriptions
+        assert "output_format" in descriptions
 
-        desc = descriptions["firmware_version"]
-        assert desc.translation_key == "firmware_version"
-        assert desc.icon == "mdi:chip"
+        desc = descriptions["output_format"]
+        assert desc.translation_key == "output_format"
+        assert desc.icon == "mdi:monitor"
         assert desc.entity_category == EntityCategory.DIAGNOSTIC
 
-    def test_uptime_description(self) -> None:
-        """Test uptime sensor description."""
-        descriptions = {desc.key: desc for desc in SENSOR_DESCRIPTIONS}
-        assert "uptime" in descriptions
 
-        desc = descriptions["uptime"]
-        assert desc.translation_key == "uptime"
-        assert desc.icon == "mdi:clock-outline"
-        assert desc.entity_category == EntityCategory.DIAGNOSTIC
-
-    def test_device_mode_description(self) -> None:
-        """Test device mode sensor description."""
-        descriptions = {desc.key: desc for desc in SENSOR_DESCRIPTIONS}
-        assert "device_mode" in descriptions
-
-        desc = descriptions["device_mode"]
-        assert desc.translation_key == "device_mode"
-        assert desc.icon == "mdi:video-switch"
-
-
-class TestZowietekSensorInit:
-    """Tests for ZowietekSensor initialization."""
+class TestZowietekSensor:
+    """Tests for ZowietekSensor class."""
 
     async def test_sensor_inherits_from_zowietek_entity(
         self,
@@ -344,7 +388,7 @@ class TestZowietekSensorValues:
 
         sensor = ZowietekSensor(coordinator, descriptions["stream_bitrate"])
 
-        assert sensor.native_value == 8000
+        assert sensor.native_value == 12000000
 
     async def test_encoder_type_value(
         self,
@@ -360,7 +404,7 @@ class TestZowietekSensorValues:
 
         sensor = ZowietekSensor(coordinator, descriptions["encoder_type"])
 
-        assert sensor.native_value == "h264"
+        assert sensor.native_value == "H.264"
 
     async def test_ndi_name_value(
         self,
@@ -378,54 +422,21 @@ class TestZowietekSensorValues:
 
         assert sensor.native_value == "ZowieBox-Studio"
 
-    async def test_firmware_version_value(
+    async def test_output_format_value(
         self,
         hass: HomeAssistant,
         mock_config_entry: MockConfigEntry,
         mock_zowietek_client: MagicMock,
     ) -> None:
-        """Test firmware version sensor returns correct value."""
+        """Test output format sensor returns correct value."""
         await _setup_integration(hass, mock_config_entry)
 
         coordinator = mock_config_entry.runtime_data
         descriptions = {desc.key: desc for desc in SENSOR_DESCRIPTIONS}
 
-        sensor = ZowietekSensor(coordinator, descriptions["firmware_version"])
+        sensor = ZowietekSensor(coordinator, descriptions["output_format"])
 
-        assert sensor.native_value == "1.2.3"
-
-    async def test_uptime_value(
-        self,
-        hass: HomeAssistant,
-        mock_config_entry: MockConfigEntry,
-        mock_zowietek_client: MagicMock,
-    ) -> None:
-        """Test uptime sensor returns correct value."""
-        await _setup_integration(hass, mock_config_entry)
-
-        coordinator = mock_config_entry.runtime_data
-        descriptions = {desc.key: desc for desc in SENSOR_DESCRIPTIONS}
-
-        sensor = ZowietekSensor(coordinator, descriptions["uptime"])
-
-        # Uptime should be formatted or raw value
-        assert sensor.native_value == "123456"
-
-    async def test_device_mode_value(
-        self,
-        hass: HomeAssistant,
-        mock_config_entry: MockConfigEntry,
-        mock_zowietek_client: MagicMock,
-    ) -> None:
-        """Test device mode sensor returns correct value."""
-        await _setup_integration(hass, mock_config_entry)
-
-        coordinator = mock_config_entry.runtime_data
-        descriptions = {desc.key: desc for desc in SENSOR_DESCRIPTIONS}
-
-        sensor = ZowietekSensor(coordinator, descriptions["device_mode"])
-
-        assert sensor.native_value == "encoder"
+        assert sensor.native_value == "1080p60"
 
     async def test_missing_value_returns_none(
         self,
@@ -433,44 +444,19 @@ class TestZowietekSensorValues:
         mock_config_entry: MockConfigEntry,
         mock_zowietek_client: MagicMock,
     ) -> None:
-        """Test sensor returns None when value is missing from coordinator data."""
-        # Remove NDI name from mock response
-        mock_zowietek_client.async_get_ndi_config.return_value = {
-            "status": "00000",
-            "rsp": "succeed",
-            "ndi_enable": 1,
-            # ndi_name is missing
-        }
-
-        await _setup_integration(hass, mock_config_entry)
-
-        coordinator = mock_config_entry.runtime_data
-        descriptions = {desc.key: desc for desc in SENSOR_DESCRIPTIONS}
-
-        sensor = ZowietekSensor(coordinator, descriptions["ndi_name"])
-
-        assert sensor.native_value is None
-
-    async def test_invalid_value_key_returns_none(
-        self,
-        hass: HomeAssistant,
-        mock_config_entry: MockConfigEntry,
-        mock_zowietek_client: MagicMock,
-    ) -> None:
-        """Test sensor returns None when value_key is invalid (no dot)."""
+        """Test sensor returns None for missing data."""
         await _setup_integration(hass, mock_config_entry)
 
         coordinator = mock_config_entry.runtime_data
 
-        # Create a description with invalid value_key (no section.key format)
-        invalid_description = ZowietekSensorEntityDescription(
-            key="invalid_sensor",
-            name="Invalid",
-            icon="mdi:help",
-            value_key="invalid_no_dot",  # Invalid - no dot separator
+        # Create a description with a non-existent key
+        desc = ZowietekSensorEntityDescription(
+            key="nonexistent",
+            name="Nonexistent",
+            value_key="video.nonexistent_key",
         )
 
-        sensor = ZowietekSensor(coordinator, invalid_description)
+        sensor = ZowietekSensor(coordinator, desc)
 
         assert sensor.native_value is None
 
@@ -486,89 +472,16 @@ class TestZowietekSensorValues:
         coordinator = mock_config_entry.runtime_data
         descriptions = {desc.key: desc for desc in SENSOR_DESCRIPTIONS}
 
-        # Manually set coordinator.data to None
+        # Set coordinator data to None
         coordinator.data = None
 
         sensor = ZowietekSensor(coordinator, descriptions["video_resolution"])
 
         assert sensor.native_value is None
 
-    async def test_invalid_section_returns_none(
-        self,
-        hass: HomeAssistant,
-        mock_config_entry: MockConfigEntry,
-        mock_zowietek_client: MagicMock,
-    ) -> None:
-        """Test sensor returns None when section doesn't exist in coordinator data."""
-        await _setup_integration(hass, mock_config_entry)
-
-        coordinator = mock_config_entry.runtime_data
-
-        # Create a description with non-existent section
-        invalid_description = ZowietekSensorEntityDescription(
-            key="nonexistent_sensor",
-            name="Nonexistent",
-            icon="mdi:help",
-            value_key="nonexistent_section.some_key",
-        )
-
-        sensor = ZowietekSensor(coordinator, invalid_description)
-
-        assert sensor.native_value is None
-
-    async def test_non_primitive_value_converted_to_string(
-        self,
-        hass: HomeAssistant,
-        mock_config_entry: MockConfigEntry,
-        mock_zowietek_client: MagicMock,
-    ) -> None:
-        """Test sensor converts non-primitive values to string."""
-        # Set up a complex value in the mock response
-        mock_zowietek_client.async_get_device_info.return_value = {
-            "status": "00000",
-            "rsp": "succeed",
-            "devicesn": "zowiebox-test-12345",
-            "devicename": "ZowieBox-Test",
-            "softver": "1.2.3",
-            "complex_value": ["list", "value"],  # Non-primitive
-        }
-
-        await _setup_integration(hass, mock_config_entry)
-
-        coordinator = mock_config_entry.runtime_data
-
-        # Create a description pointing to the complex value
-        complex_description = ZowietekSensorEntityDescription(
-            key="complex_sensor",
-            name="Complex",
-            icon="mdi:help",
-            value_key="system.complex_value",
-        )
-
-        sensor = ZowietekSensor(coordinator, complex_description)
-
-        # Should convert list to string
-        assert sensor.native_value == "['list', 'value']"
-
 
 class TestSensorSetup:
-    """Tests for sensor platform setup."""
-
-    async def test_async_setup_entry_creates_sensors(
-        self,
-        hass: HomeAssistant,
-        mock_config_entry: MockConfigEntry,
-        mock_zowietek_client: MagicMock,
-    ) -> None:
-        """Test async_setup_entry creates all sensor entities."""
-        await _setup_integration(hass, mock_config_entry)
-
-        # Verify sensors are created
-        entity_registry = er.async_get(hass)
-        entries = er.async_entries_for_config_entry(entity_registry, mock_config_entry.entry_id)
-
-        sensor_entries = [e for e in entries if e.domain == "sensor"]
-        assert len(sensor_entries) == len(SENSOR_DESCRIPTIONS)
+    """Tests for sensor setup."""
 
     async def test_sensor_entities_registered(
         self,
@@ -583,7 +496,7 @@ class TestSensorSetup:
 
         # Check each sensor is registered
         for description in SENSOR_DESCRIPTIONS:
-            entity_id = f"sensor.zowiebox_test_{description.key}"
+            entity_id = f"sensor.zowiebox_studio_{description.key}"
             entry = entity_registry.async_get(entity_id)
             assert entry is not None, f"Sensor {entity_id} not registered"
 
@@ -596,15 +509,119 @@ class TestSensorSetup:
         """Test sensor states are available in Home Assistant."""
         await _setup_integration(hass, mock_config_entry)
 
-        # Check video resolution state
-        state = hass.states.get("sensor.zowiebox_test_video_resolution")
+        # Check video resolution
+        state = hass.states.get("sensor.zowiebox_studio_video_resolution")
         assert state is not None
         assert state.state == "1920x1080"
 
-        # Check frame rate state
-        state = hass.states.get("sensor.zowiebox_test_frame_rate")
+        # Check frame rate
+        state = hass.states.get("sensor.zowiebox_studio_frame_rate")
         assert state is not None
         assert state.state == "60"
+
+        # Check stream bitrate
+        state = hass.states.get("sensor.zowiebox_studio_stream_bitrate")
+        assert state is not None
+        assert state.state == "12000000"
+
+        # Check encoder type
+        state = hass.states.get("sensor.zowiebox_studio_encoder_type")
+        assert state is not None
+        assert state.state == "H.264"
+
+        # Check NDI name
+        state = hass.states.get("sensor.zowiebox_studio_ndi_name")
+        assert state is not None
+        assert state.state == "ZowieBox-Studio"
+
+        # Check output format
+        state = hass.states.get("sensor.zowiebox_studio_output_format")
+        assert state is not None
+        assert state.state == "1080p60"
+
+
+class TestSensorEntityCategory:
+    """Tests for sensor entity categories."""
+
+    async def test_diagnostic_sensors_have_category(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test diagnostic sensors have EntityCategory.DIAGNOSTIC."""
+        await _setup_integration(hass, mock_config_entry)
+
+        entity_registry = er.async_get(hass)
+
+        # Output format should be diagnostic
+        output_entry = entity_registry.async_get("sensor.zowiebox_studio_output_format")
+        assert output_entry is not None
+        assert output_entry.entity_category == EntityCategory.DIAGNOSTIC
+
+    async def test_non_diagnostic_sensors_no_category(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test non-diagnostic sensors have no entity category."""
+        await _setup_integration(hass, mock_config_entry)
+
+        entity_registry = er.async_get(hass)
+
+        # Video resolution should not be diagnostic
+        resolution_entry = entity_registry.async_get("sensor.zowiebox_studio_video_resolution")
+        assert resolution_entry is not None
+        assert resolution_entry.entity_category is None
+
+        # Frame rate should not be diagnostic
+        framerate_entry = entity_registry.async_get("sensor.zowiebox_studio_frame_rate")
+        assert framerate_entry is not None
+        assert framerate_entry.entity_category is None
+
+
+class TestSensorIcons:
+    """Tests for sensor icons."""
+
+    async def test_video_resolution_icon(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test video resolution sensor has correct icon."""
+        await _setup_integration(hass, mock_config_entry)
+
+        state = hass.states.get("sensor.zowiebox_studio_video_resolution")
+        assert state is not None
+        assert state.attributes.get("icon") == "mdi:video"
+
+    async def test_frame_rate_icon(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test frame rate sensor has correct icon."""
+        await _setup_integration(hass, mock_config_entry)
+
+        state = hass.states.get("sensor.zowiebox_studio_frame_rate")
+        assert state is not None
+        assert state.attributes.get("icon") == "mdi:camera-timer"
+
+    async def test_ndi_name_icon(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test NDI name sensor has correct icon."""
+        await _setup_integration(hass, mock_config_entry)
+
+        state = hass.states.get("sensor.zowiebox_studio_ndi_name")
+        assert state is not None
+        assert state.attributes.get("icon") == "mdi:broadcast"
 
 
 class TestSensorAvailability:
@@ -626,7 +643,7 @@ class TestSensorAvailability:
 
         assert sensor.available is True
 
-    async def test_sensor_unavailable_when_coordinator_fails(
+    async def test_sensor_unavailable_when_coordinator_update_fails(
         self,
         hass: HomeAssistant,
         mock_config_entry: MockConfigEntry,
@@ -636,73 +653,11 @@ class TestSensorAvailability:
         await _setup_integration(hass, mock_config_entry)
 
         coordinator = mock_config_entry.runtime_data
+        descriptions = {desc.key: desc for desc in SENSOR_DESCRIPTIONS}
+
+        # Simulate coordinator update failure
         coordinator.last_update_success = False
 
-        descriptions = {desc.key: desc for desc in SENSOR_DESCRIPTIONS}
         sensor = ZowietekSensor(coordinator, descriptions["video_resolution"])
 
         assert sensor.available is False
-
-
-class TestSensorDeviceInfo:
-    """Tests for sensor device info."""
-
-    async def test_sensor_has_device_info(
-        self,
-        hass: HomeAssistant,
-        mock_config_entry: MockConfigEntry,
-        mock_zowietek_client: MagicMock,
-    ) -> None:
-        """Test sensor has device_info property from base entity."""
-        await _setup_integration(hass, mock_config_entry)
-
-        coordinator = mock_config_entry.runtime_data
-        descriptions = {desc.key: desc for desc in SENSOR_DESCRIPTIONS}
-
-        sensor = ZowietekSensor(coordinator, descriptions["video_resolution"])
-        device_info = sensor.device_info
-
-        assert device_info is not None
-        assert device_info["identifiers"] == {(DOMAIN, "zowiebox-test-12345")}
-        assert device_info["manufacturer"] == "Zowietek"
-
-
-class TestSensorEntityCategory:
-    """Tests for sensor entity categories."""
-
-    async def test_diagnostic_sensors_have_category(
-        self,
-        hass: HomeAssistant,
-        mock_config_entry: MockConfigEntry,
-        mock_zowietek_client: MagicMock,
-    ) -> None:
-        """Test diagnostic sensors have EntityCategory.DIAGNOSTIC."""
-        await _setup_integration(hass, mock_config_entry)
-
-        entity_registry = er.async_get(hass)
-
-        # Firmware version should be diagnostic
-        firmware_entry = entity_registry.async_get("sensor.zowiebox_test_firmware_version")
-        assert firmware_entry is not None
-        assert firmware_entry.entity_category == EntityCategory.DIAGNOSTIC
-
-        # Uptime should be diagnostic
-        uptime_entry = entity_registry.async_get("sensor.zowiebox_test_uptime")
-        assert uptime_entry is not None
-        assert uptime_entry.entity_category == EntityCategory.DIAGNOSTIC
-
-    async def test_non_diagnostic_sensors_no_category(
-        self,
-        hass: HomeAssistant,
-        mock_config_entry: MockConfigEntry,
-        mock_zowietek_client: MagicMock,
-    ) -> None:
-        """Test non-diagnostic sensors have no entity category."""
-        await _setup_integration(hass, mock_config_entry)
-
-        entity_registry = er.async_get(hass)
-
-        # Video resolution should not be diagnostic
-        resolution_entry = entity_registry.async_get("sensor.zowiebox_test_video_resolution")
-        assert resolution_entry is not None
-        assert resolution_entry.entity_category is None

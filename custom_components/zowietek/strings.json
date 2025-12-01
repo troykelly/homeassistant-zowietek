@@ -60,6 +60,23 @@
       "srt_stream": {
         "name": "SRT stream"
       }
+    },
+    "binary_sensor": {
+      "streaming": {
+        "name": "Streaming"
+      },
+      "video_input": {
+        "name": "Video input"
+      },
+      "ndi_enabled": {
+        "name": "NDI enabled"
+      },
+      "rtmp_enabled": {
+        "name": "RTMP enabled"
+      },
+      "srt_enabled": {
+        "name": "SRT enabled"
+      }
     }
   }
 }

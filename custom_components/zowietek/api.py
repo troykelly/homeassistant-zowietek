@@ -296,6 +296,31 @@ class ZowietekClient:
         )
         return self._extract_data(data, "all")
 
+    async def async_get_venc_info(self) -> dict[str, Any]:
+        """Get video encoder information from the device.
+
+        Returns:
+            Video encoder information with venc array containing all channels.
+        """
+        data = await self._request(
+            "/video?option=getinfo",
+            {"group": "venc"},
+        )
+        # Return the raw response which contains 'venc' array
+        return data
+
+    async def async_get_audio_info(self) -> dict[str, Any]:
+        """Get audio configuration from the device.
+
+        Returns:
+            Audio configuration including input type, codec, sample rate, etc.
+        """
+        data = await self._request(
+            "/audio?option=getinfo",
+            {"group": "all"},
+        )
+        return self._extract_data(data, "all")
+
     async def async_get_input_signal(self) -> dict[str, Any]:
         """Get HDMI input signal information.
 
@@ -338,12 +363,55 @@ class ZowietekClient:
     async def async_get_ndi_config(self) -> dict[str, Any]:
         """Get NDI configuration.
 
+        NDI configuration is under the /video endpoint with group "ndi"
+        per the ZowieBox API documentation.
+
         Returns:
             NDI configuration and status.
         """
         data = await self._request(
-            "/ndi?option=getinfo",
-            {"group": "ndi", "opt": "get_config"},
+            "/video?option=getinfo",
+            {"group": "ndi", "opt": "get_ndi_info"},
+        )
+        return self._extract_data(data, "data")
+
+    async def async_get_sys_attr_info(self) -> dict[str, Any]:
+        """Get system attributes including firmware version and serial number.
+
+        This endpoint returns comprehensive device information including:
+        - SN: Serial number
+        - firmware_version: Firmware version string
+        - hardware_version: Hardware version string
+        - model: Device model (e.g., "ZowieBox")
+        - manufacturer: Manufacturer name
+        - device_name: Configured device name
+        - ndi_version: NDI library version
+
+        Returns:
+            System attributes dictionary.
+        """
+        data = await self._request(
+            "/system?option=getinfo",
+            {"group": "sys_attr", "opt": "get_sys_attr_info"},
+        )
+        return self._extract_data(data, "data")
+
+    async def async_get_dashboard_info(self) -> dict[str, Any]:
+        """Get dashboard information including uptime and system stats.
+
+        This endpoint returns:
+        - persistent_time: Device uptime as HH:MM:SS string
+        - device_strat_time: Device start time as datetime string
+        - cpu_temp: CPU temperature in Celsius
+        - cpu_payload: CPU usage percentage
+        - memory_info: Memory usage statistics
+
+        Returns:
+            Dashboard information dictionary.
+        """
+        data = await self._request(
+            "/system?option=getinfo",
+            {"group": "get_dashboard_info"},
         )
         return self._extract_data(data, "data")
 
@@ -401,6 +469,9 @@ class ZowietekClient:
     async def async_set_ndi_enabled(self, enabled: bool) -> None:
         """Enable or disable NDI streaming.
 
+        NDI configuration is under the /video endpoint with group "ndi"
+        per the ZowieBox API documentation.
+
         Args:
             enabled: True to enable NDI, False to disable.
 
@@ -408,11 +479,11 @@ class ZowietekClient:
             ZowietekAuthError: If authentication fails.
         """
         await self._request(
-            "/ndi?option=setinfo",
+            "/video?option=setinfo",
             {
                 "group": "ndi",
-                "opt": "set_config",
-                "data": {"ndi_enable": 1 if enabled else 0},
+                "opt": "set_ndi_info",
+                "data": {"switch": 1 if enabled else 0},
             },
             requires_auth=True,
         )

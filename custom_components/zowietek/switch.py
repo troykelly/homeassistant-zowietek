@@ -107,14 +107,15 @@ class ZowietekSwitch(ZowietekEntity, SwitchEntity):
         stream_data = self.coordinator.data.stream
 
         if stream_type == "ndi":
-            # NDI enabled state is in ndi_enable field
-            ndi_enable = stream_data.get("ndi_enable")
-            if ndi_enable is None:
+            # Coordinator stores NDI switch under 'ndi_switch' key
+            ndi_switch = stream_data.get("ndi_switch")
+            if ndi_switch is None:
                 return False
             # Handle both int and string values
-            return str(ndi_enable) == "1"
+            return str(ndi_switch) == "1"
 
         # For RTMP and SRT, check the publish list
+        # API uses 'switch' field for enabled state
         publish_list = stream_data.get("publish")
         if not isinstance(publish_list, list):
             return False
@@ -123,11 +124,11 @@ class ZowietekSwitch(ZowietekEntity, SwitchEntity):
             if not isinstance(entry, dict):
                 continue
             if entry.get("type") == stream_type:
-                enable = entry.get("enable")
-                if enable is None:
+                switch = entry.get("switch")
+                if switch is None:
                     return False
                 # Handle both int and string values
-                return str(enable) == "1"
+                return str(switch) == "1"
 
         return False
 

@@ -101,14 +101,11 @@
       }
     },
     "select": {
-      "video_mode": {
-        "name": "Video mode"
-      },
-      "resolution": {
-        "name": "Resolution"
-      },
       "encoder_type": {
         "name": "Encoder type"
+      },
+      "output_format": {
+        "name": "Output format"
       }
     }
   }

@@ -535,6 +535,51 @@ class ZowietekClient:
             requires_auth=True,
         )
 
+    async def async_set_encoder_codec(self, codec_id: int) -> None:
+        """Set the encoder codec type.
+
+        Args:
+            codec_id: The codec index (0=H.264, 1=H.265, 2=MJPEG typically).
+
+        Raises:
+            ZowietekAuthError: If authentication fails.
+            ZowietekApiError: If the codec ID is invalid.
+        """
+        await self._request(
+            "/video?option=setinfo",
+            {
+                "group": "venc",
+                "venc": [
+                    {
+                        "venc_chnid": 0,
+                        "codec": {"selected_id": codec_id},
+                        "desc": "main",
+                    },
+                ],
+            },
+            requires_auth=True,
+        )
+
+    async def async_set_ndi_mode(self, mode_id: int) -> None:
+        """Set the NDI mode.
+
+        Args:
+            mode_id: The NDI mode (1=NDI|HX, 2=NDI|HX2, 3=NDI|HX3).
+
+        Raises:
+            ZowietekAuthError: If authentication fails.
+            ZowietekApiError: If the mode ID is invalid.
+        """
+        await self._request(
+            "/video?option=setinfo",
+            {
+                "group": "ndi",
+                "opt": "set_ndi_info",
+                "data": {"mode_id": mode_id},
+            },
+            requires_auth=True,
+        )
+
     async def close(self) -> None:
         """Close the client session.
 

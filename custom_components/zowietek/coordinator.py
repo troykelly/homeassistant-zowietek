@@ -236,10 +236,24 @@ class ZowietekCoordinator(DataUpdateCoordinator[ZowietekData]):
                 if isinstance(bitrate, int):
                     video_data["enc_bitrate"] = bitrate
                 video_data["enc_type"] = codec_name
+                # Store codec list and selected_id for select entity
+                video_data["codec_list"] = codec_list  # type: ignore[assignment]
+                video_data["codec_selected_id"] = codec_id
 
             # Add output format from output_info
             if output_info:
                 video_data["output_format"] = output_info.get("format", "")
+                # Store output format list for select entity
+                format_list_info = output_info.get("format_list")
+                if isinstance(format_list_info, dict):
+                    fmt_list_raw = format_list_info.get("list", [])
+                    if isinstance(fmt_list_raw, list):
+                        video_data["output_format_list"] = [  # type: ignore[assignment]
+                            str(f) for f in fmt_list_raw
+                        ]
+                    fmt_selected_id = format_list_info.get("selected_id", 0)
+                    if isinstance(fmt_selected_id, int):
+                        video_data["output_format_selected_id"] = fmt_selected_id
 
             # Add input signal data for binary sensor video_input detection
             # Flatten input_signal into video_data with "input_" prefix

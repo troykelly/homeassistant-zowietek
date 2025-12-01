@@ -6,16 +6,12 @@ from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.zowietek import (
-    PLATFORMS,
-    async_setup_entry,
-    async_unload_entry,
-)
+from custom_components.zowietek import PLATFORMS
 from custom_components.zowietek.const import DOMAIN
 from custom_components.zowietek.coordinator import ZowietekCoordinator
 from custom_components.zowietek.exceptions import (
@@ -156,9 +152,10 @@ class TestAsyncSetupEntry:
         """Test successful setup of config entry."""
         mock_config_entry.add_to_hass(hass)
 
-        result = await async_setup_entry(hass, mock_config_entry)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
 
-        assert result is True
+        assert mock_config_entry.state is ConfigEntryState.LOADED
 
     async def test_setup_entry_creates_coordinator(
         self,
@@ -169,7 +166,8 @@ class TestAsyncSetupEntry:
         """Test setup creates coordinator and stores in runtime_data."""
         mock_config_entry.add_to_hass(hass)
 
-        await async_setup_entry(hass, mock_config_entry)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
 
         assert mock_config_entry.runtime_data is not None
         assert isinstance(mock_config_entry.runtime_data, ZowietekCoordinator)
@@ -183,34 +181,35 @@ class TestAsyncSetupEntry:
         """Test setup performs first data refresh."""
         mock_config_entry.add_to_hass(hass)
 
-        await async_setup_entry(hass, mock_config_entry)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
 
         # Verify API was called during first refresh
         mock_zowietek_client.async_get_video_info.assert_called()
 
-    async def test_setup_entry_forwards_to_platforms(
+    async def test_setup_entry_coordinator_has_data(
         self,
         hass: HomeAssistant,
         mock_config_entry: MockConfigEntry,
         mock_zowietek_client: MagicMock,
     ) -> None:
-        """Test setup forwards to all platforms."""
+        """Test setup populates coordinator data."""
         mock_config_entry.add_to_hass(hass)
 
-        with patch.object(
-            hass.config_entries, "async_forward_entry_setups", new_callable=AsyncMock
-        ) as mock_forward:
-            await async_setup_entry(hass, mock_config_entry)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
 
-            mock_forward.assert_called_once_with(mock_config_entry, PLATFORMS)
+        coordinator = mock_config_entry.runtime_data
+        assert coordinator.data is not None
+        assert coordinator.data.system.get("devicesn") == "zowiebox-test-12345"
 
-    async def test_setup_entry_raises_auth_failed_on_auth_error(
+    async def test_setup_entry_setup_retry_on_auth_error(
         self,
         hass: HomeAssistant,
         mock_config_entry: MockConfigEntry,
         mock_zowietek_client: MagicMock,
     ) -> None:
-        """Test setup raises ConfigEntryAuthFailed on authentication error."""
+        """Test setup triggers setup_retry on authentication error."""
         mock_config_entry.add_to_hass(hass)
 
         # Simulate auth error during first refresh
@@ -218,16 +217,18 @@ class TestAsyncSetupEntry:
             "Authentication failed"
         )
 
-        with pytest.raises(ConfigEntryAuthFailed):
-            await async_setup_entry(hass, mock_config_entry)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
 
-    async def test_setup_entry_raises_not_ready_on_connection_error(
+        assert mock_config_entry.state is ConfigEntryState.SETUP_ERROR
+
+    async def test_setup_entry_setup_retry_on_connection_error(
         self,
         hass: HomeAssistant,
         mock_config_entry: MockConfigEntry,
         mock_zowietek_client: MagicMock,
     ) -> None:
-        """Test setup raises ConfigEntryNotReady on connection error."""
+        """Test setup triggers setup_retry on connection error."""
         mock_config_entry.add_to_hass(hass)
 
         # Simulate connection error during first refresh
@@ -235,8 +236,10 @@ class TestAsyncSetupEntry:
             "Connection failed"
         )
 
-        with pytest.raises(ConfigEntryNotReady):
-            await async_setup_entry(hass, mock_config_entry)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+        assert mock_config_entry.state is ConfigEntryState.SETUP_RETRY
 
 
 class TestAsyncUnloadEntry:
@@ -251,29 +254,14 @@ class TestAsyncUnloadEntry:
         """Test successful unload of config entry."""
         mock_config_entry.add_to_hass(hass)
 
-        await async_setup_entry(hass, mock_config_entry)
-        result = await async_unload_entry(hass, mock_config_entry)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+        result = await hass.config_entries.async_unload(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
 
         assert result is True
-
-    async def test_unload_entry_unloads_platforms(
-        self,
-        hass: HomeAssistant,
-        mock_config_entry: MockConfigEntry,
-        mock_zowietek_client: MagicMock,
-    ) -> None:
-        """Test unload unloads all platforms."""
-        mock_config_entry.add_to_hass(hass)
-
-        await async_setup_entry(hass, mock_config_entry)
-
-        with patch.object(
-            hass.config_entries, "async_unload_platforms", new_callable=AsyncMock
-        ) as mock_unload:
-            mock_unload.return_value = True
-            await async_unload_entry(hass, mock_config_entry)
-
-            mock_unload.assert_called_once_with(mock_config_entry, PLATFORMS)
+        assert mock_config_entry.state is ConfigEntryState.NOT_LOADED
 
     async def test_unload_entry_closes_client(
         self,
@@ -284,8 +272,11 @@ class TestAsyncUnloadEntry:
         """Test unload closes the API client session."""
         mock_config_entry.add_to_hass(hass)
 
-        await async_setup_entry(hass, mock_config_entry)
-        await async_unload_entry(hass, mock_config_entry)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+        await hass.config_entries.async_unload(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
 
         # Verify client was closed
         mock_zowietek_client.close.assert_called_once()
@@ -304,16 +295,19 @@ class TestSetupUnloadCycle:
         mock_config_entry.add_to_hass(hass)
 
         # First setup
-        result1 = await async_setup_entry(hass, mock_config_entry)
-        assert result1 is True
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+        assert mock_config_entry.state is ConfigEntryState.LOADED
 
         # Unload
-        unload_result = await async_unload_entry(hass, mock_config_entry)
-        assert unload_result is True
+        await hass.config_entries.async_unload(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+        assert mock_config_entry.state is ConfigEntryState.NOT_LOADED
 
         # Second setup
-        result2 = await async_setup_entry(hass, mock_config_entry)
-        assert result2 is True
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+        assert mock_config_entry.state is ConfigEntryState.LOADED
 
 
 class TestPlatforms:

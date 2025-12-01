@@ -358,10 +358,19 @@ For changes to config flow, coordinator, entities, or services:
 
 After live testing, update the issue or PR with:
 
-- Devices tested (URLs, firmware versions if relevant)
+- Number of devices tested (NOT the actual URLs/hostnames!)
 - All methods/features tested
 - Any discrepancies between mock and real behavior
 - HA integration test results (if applicable)
+
+**CRITICAL: NEVER include real hostnames, URLs, or IP addresses!**
+
+This is a security requirement. Use generic references like:
+- "Tested against device from ZOWIETEK_URL environment variable"
+- "Live testing passed on 1 device"
+- "All endpoints responded correctly"
+
+Do NOT write actual hostnames like "zow001.company.com" - this leaks infrastructure details.
 
 ### If Live Testing Reveals Issues
 
@@ -406,7 +415,7 @@ Fixes #N
 
 ## Live Testing Results
 
-- Tested against: [device URLs]
+- Tested against: [ZOWIETEK_URL from environment - NEVER include actual hostnames!]
 - All API calls successful
 - HA entities functioning correctly
 

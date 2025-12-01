@@ -125,6 +125,43 @@ Unit tests with mocks are necessary but NOT sufficient. Before any code is consi
 
 See skill: `ha-zowietek-live-testing`
 
+### 7. Never Leak Sensitive Information
+
+**NEVER include real hostnames, URLs, IP addresses, or credentials in:**
+
+- Commit messages
+- Pull request descriptions
+- Issue comments
+- Code comments
+- Documentation
+
+**When documenting live testing results, use generic placeholders:**
+
+```markdown
+## Live Testing Results
+
+### Device Testing
+- **Device 1:** [ZOWIETEK_URL from environment]
+  - Connection: OK
+  - Authentication: OK
+
+### What to write:
+- "Tested against device from ZOWIETEK_URL environment variable"
+- "Live device testing passed"
+- "All endpoints responded correctly"
+
+### What NOT to write:
+- Actual hostnames (e.g., zow001.company.com)
+- IP addresses (e.g., 192.168.1.100)
+- Internal domain names
+- Any identifying infrastructure information
+```
+
+**This is a SECURITY requirement.** Leaking infrastructure details can expose:
+- Internal network topology
+- Device locations
+- Potential attack vectors
+
 ## Project Structure
 
 ```

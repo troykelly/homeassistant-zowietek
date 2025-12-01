@@ -322,21 +322,28 @@ rm -rf /workspaces/homeassistant-zowietek/config/.storage/core.config_entries
 
 ## Documenting Results
 
-After live testing, document results in the PR or issue:
+After live testing, document results in the PR or issue.
+
+**CRITICAL: NEVER include real hostnames, URLs, or IP addresses in documentation!**
+
+This is a security requirement. Real infrastructure details must never appear in:
+- Commit messages
+- Pull request descriptions
+- Issue comments
+- Any public documentation
+
+### Correct Format (Use This)
 
 ```markdown
 ## Live Testing Results
 
 ### Device Testing
-- **Device 1:** http://zow001.example.com
+- **Device:** [ZOWIETEK_URL from environment]
   - Connection: OK
   - Authentication: OK
-  - All endpoints: OK
-
-- **Device 2:** http://zow002.example.com
-  - Connection: OK
-  - Authentication: OK
-  - All endpoints: OK
+  - All endpoints responded correctly
+  - Optional endpoints (device_info, ndi_config): Gracefully handled
+  - Required endpoints: OK
 
 ### Home Assistant Testing
 - Config flow: OK
@@ -344,7 +351,37 @@ After live testing, document results in the PR or issue:
 - State updates: OK
 - Actions: OK
 - Logs: No errors
+
+### Summary
+Live device testing passed against device(s) from environment variables.
 ```
+
+### WRONG Format (Never Do This)
+
+```markdown
+## Live Testing Results
+
+### Device Testing
+- **Device:** http://zow001.company.internal.com  <-- SECURITY VIOLATION!
+- **Device:** 192.168.1.100  <-- SECURITY VIOLATION!
+- **Device:** zowiebox.office.example.net  <-- SECURITY VIOLATION!
+```
+
+### What You CAN Include
+
+- Generic status (OK, FAILED, PASSED)
+- Error messages (sanitized of hostnames)
+- Endpoint names (video_info, ndi_config, etc.)
+- Feature behavior descriptions
+- Number of devices tested
+
+### What You MUST NOT Include
+
+- Actual hostnames or domain names
+- IP addresses
+- Port numbers with hosts
+- Internal network topology details
+- Any identifying infrastructure information
 
 ## If Live Testing Fails
 

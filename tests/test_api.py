@@ -674,6 +674,199 @@ class TestZowietekClientWriteOperations:
 
         mock_session.post.assert_called_once()
 
+    @pytest.mark.asyncio
+    async def test_async_set_ndi_enabled_true(self) -> None:
+        """Test enabling NDI stream."""
+        mock_response = _create_mock_response(
+            {
+                "status": STATUS_SUCCESS,
+                "rsp": "succeed",
+            }
+        )
+        mock_session = _create_mock_session(mock_response)
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
+
+        await client.async_set_ndi_enabled(True)
+
+        mock_session.post.assert_called_once()
+        call_args = mock_session.post.call_args
+        json_data = call_args[1]["json"]
+        assert json_data["data"]["ndi_enable"] == 1
+
+    @pytest.mark.asyncio
+    async def test_async_set_ndi_enabled_false(self) -> None:
+        """Test disabling NDI stream."""
+        mock_response = _create_mock_response(
+            {
+                "status": STATUS_SUCCESS,
+                "rsp": "succeed",
+            }
+        )
+        mock_session = _create_mock_session(mock_response)
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
+
+        await client.async_set_ndi_enabled(False)
+
+        mock_session.post.assert_called_once()
+        call_args = mock_session.post.call_args
+        json_data = call_args[1]["json"]
+        assert json_data["data"]["ndi_enable"] == 0
+
+    @pytest.mark.asyncio
+    async def test_async_set_stream_enabled_rtmp_true(self) -> None:
+        """Test enabling RTMP stream."""
+        # First call returns publish list with RTMP entry
+        mock_response_get = _create_mock_response(
+            {
+                "status": STATUS_SUCCESS,
+                "rsp": "succeed",
+                "publish": [
+                    {"type": "rtmp", "index": 0, "enable": 0, "url": "rtmp://example.com"},
+                ],
+            }
+        )
+        # Second call is the setinfo
+        mock_response_set = _create_mock_response(
+            {
+                "status": STATUS_SUCCESS,
+                "rsp": "succeed",
+            }
+        )
+
+        mock_session = MagicMock(spec=aiohttp.ClientSession)
+        mock_session.closed = False
+        mock_session.close = AsyncMock()
+
+        # Return different responses for each call
+        call_count = [0]
+
+        def create_context_manager(response: MagicMock) -> MagicMock:
+            cm = MagicMock()
+            cm.__aenter__ = AsyncMock(return_value=response)
+            cm.__aexit__ = AsyncMock(return_value=None)
+            return cm
+
+        def side_effect(*args: object, **kwargs: object) -> MagicMock:
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return create_context_manager(mock_response_get)
+            return create_context_manager(mock_response_set)
+
+        mock_session.post = MagicMock(side_effect=side_effect)
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
+
+        await client.async_set_stream_enabled("rtmp", True)
+
+        assert mock_session.post.call_count == 2
+        # Second call is the setinfo with update_publish_switch
+        call_args = mock_session.post.call_args_list[1]
+        json_data = call_args[1]["json"]
+        assert json_data["opt"] == "update_publish_switch"
+        assert json_data["data"]["index"] == 0
+        assert json_data["data"]["switch"] == 1
+
+    @pytest.mark.asyncio
+    async def test_async_set_stream_enabled_srt_false(self) -> None:
+        """Test disabling SRT stream."""
+        # First call returns publish list with SRT entry
+        mock_response_get = _create_mock_response(
+            {
+                "status": STATUS_SUCCESS,
+                "rsp": "succeed",
+                "publish": [
+                    {"type": "rtmp", "index": 0, "enable": 1, "url": "rtmp://example.com"},
+                    {"type": "srt", "index": 1, "enable": 1, "url": "srt://example.com"},
+                ],
+            }
+        )
+        # Second call is the setinfo
+        mock_response_set = _create_mock_response(
+            {
+                "status": STATUS_SUCCESS,
+                "rsp": "succeed",
+            }
+        )
+
+        mock_session = MagicMock(spec=aiohttp.ClientSession)
+        mock_session.closed = False
+        mock_session.close = AsyncMock()
+
+        call_count = [0]
+
+        def create_context_manager(response: MagicMock) -> MagicMock:
+            cm = MagicMock()
+            cm.__aenter__ = AsyncMock(return_value=response)
+            cm.__aexit__ = AsyncMock(return_value=None)
+            return cm
+
+        def side_effect(*args: object, **kwargs: object) -> MagicMock:
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return create_context_manager(mock_response_get)
+            return create_context_manager(mock_response_set)
+
+        mock_session.post = MagicMock(side_effect=side_effect)
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
+
+        await client.async_set_stream_enabled("srt", False)
+
+        assert mock_session.post.call_count == 2
+        # Second call is the setinfo with update_publish_switch
+        call_args = mock_session.post.call_args_list[1]
+        json_data = call_args[1]["json"]
+        assert json_data["opt"] == "update_publish_switch"
+        assert json_data["data"]["index"] == 1
+        assert json_data["data"]["switch"] == 0
+
+    @pytest.mark.asyncio
+    async def test_async_set_stream_enabled_not_found(self) -> None:
+        """Test error when stream type not found."""
+        # Return empty publish list
+        mock_response = _create_mock_response(
+            {
+                "status": STATUS_SUCCESS,
+                "rsp": "succeed",
+                "publish": [],
+            }
+        )
+        mock_session = _create_mock_session(mock_response)
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
+
+        with pytest.raises(ZowietekApiError) as exc_info:
+            await client.async_set_stream_enabled("rtmp", True)
+
+        assert "not found" in str(exc_info.value)
+
 
 class TestZowietekClientErrorHandling:
     """Tests for ZowietekClient error handling."""

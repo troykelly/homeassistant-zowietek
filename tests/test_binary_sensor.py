@@ -504,6 +504,218 @@ class TestZowietekBinarySensorValues:
 
         assert binary_sensor.is_on is None
 
+    async def test_streaming_is_on_when_only_srt_enabled(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test streaming binary sensor is on when only SRT is enabled."""
+        # Disable NDI
+        mock_zowietek_client.async_get_ndi_config.return_value = {
+            "status": "00000",
+            "rsp": "succeed",
+            "ndi_enable": 0,
+            "ndi_name": "ZowieBox-Studio",
+        }
+        # Disable RTMP but enable SRT
+        mock_zowietek_client.async_get_stream_publish_info.return_value = {
+            "publish": [
+                {"type": "rtmp", "enable": 0, "url": ""},
+                {"type": "srt", "enable": 1, "url": "srt://example.com:9000"},
+            ],
+        }
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        descriptions = {desc.key: desc for desc in BINARY_SENSOR_DESCRIPTIONS}
+
+        binary_sensor = ZowietekBinarySensor(coordinator, descriptions["streaming"])
+
+        # Streaming should be on because SRT is enabled
+        assert binary_sensor.is_on is True
+
+    async def test_video_input_returns_false_when_input_not_dict(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test video input binary sensor returns False when input data is not a dict."""
+        # Set input to a non-dict value
+        mock_zowietek_client.async_get_input_signal.return_value = "invalid"
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        descriptions = {desc.key: desc for desc in BINARY_SENSOR_DESCRIPTIONS}
+
+        binary_sensor = ZowietekBinarySensor(coordinator, descriptions["video_input"])
+
+        assert binary_sensor.is_on is False
+
+    async def test_video_input_returns_false_when_signal_missing(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test video input binary sensor returns False when signal key is missing."""
+        mock_zowietek_client.async_get_input_signal.return_value = {
+            "status": "00000",
+            "rsp": "succeed",
+            # signal key is missing
+            "width": 1920,
+            "height": 1080,
+        }
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        descriptions = {desc.key: desc for desc in BINARY_SENSOR_DESCRIPTIONS}
+
+        binary_sensor = ZowietekBinarySensor(coordinator, descriptions["video_input"])
+
+        assert binary_sensor.is_on is False
+
+    async def test_unknown_sensor_type_returns_none(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test binary sensor returns None for unknown sensor type."""
+        from custom_components.zowietek.binary_sensor import (
+            ZowietekBinarySensorEntityDescription,
+        )
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+
+        # Create a description with an unknown sensor_type
+        unknown_description = ZowietekBinarySensorEntityDescription(
+            key="unknown_sensor",
+            name="Unknown",
+            sensor_type="unknown_type",
+        )
+
+        binary_sensor = ZowietekBinarySensor(coordinator, unknown_description)
+
+        assert binary_sensor.is_on is None
+
+    async def test_ndi_enabled_returns_false_when_ndi_enable_missing(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test NDI enabled returns False when ndi_enable key is missing."""
+        mock_zowietek_client.async_get_ndi_config.return_value = {
+            "status": "00000",
+            "rsp": "succeed",
+            # ndi_enable key is missing
+            "ndi_name": "ZowieBox-Studio",
+        }
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        descriptions = {desc.key: desc for desc in BINARY_SENSOR_DESCRIPTIONS}
+
+        binary_sensor = ZowietekBinarySensor(coordinator, descriptions["ndi_enabled"])
+
+        assert binary_sensor.is_on is False
+
+    async def test_rtmp_enabled_returns_false_when_publish_not_list(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test RTMP enabled returns False when publish is not a list."""
+        mock_zowietek_client.async_get_stream_publish_info.return_value = {
+            "publish": "invalid",  # Not a list
+        }
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        descriptions = {desc.key: desc for desc in BINARY_SENSOR_DESCRIPTIONS}
+
+        binary_sensor = ZowietekBinarySensor(coordinator, descriptions["rtmp_enabled"])
+
+        assert binary_sensor.is_on is False
+
+    async def test_rtmp_enabled_skips_non_dict_entries(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test RTMP enabled skips non-dict entries in publish list."""
+        mock_zowietek_client.async_get_stream_publish_info.return_value = {
+            "publish": [
+                "invalid_entry",  # Not a dict, should be skipped
+                {"type": "rtmp", "enable": 1, "url": "rtmp://example.com"},
+            ],
+        }
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        descriptions = {desc.key: desc for desc in BINARY_SENSOR_DESCRIPTIONS}
+
+        binary_sensor = ZowietekBinarySensor(coordinator, descriptions["rtmp_enabled"])
+
+        assert binary_sensor.is_on is True
+
+    async def test_rtmp_enabled_returns_false_when_enable_missing(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test RTMP enabled returns False when enable key is missing."""
+        mock_zowietek_client.async_get_stream_publish_info.return_value = {
+            "publish": [
+                {"type": "rtmp", "url": "rtmp://example.com"},  # enable key missing
+            ],
+        }
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        descriptions = {desc.key: desc for desc in BINARY_SENSOR_DESCRIPTIONS}
+
+        binary_sensor = ZowietekBinarySensor(coordinator, descriptions["rtmp_enabled"])
+
+        assert binary_sensor.is_on is False
+
+    async def test_rtmp_enabled_returns_false_when_protocol_not_found(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test RTMP enabled returns False when rtmp not in publish list."""
+        mock_zowietek_client.async_get_stream_publish_info.return_value = {
+            "publish": [
+                {"type": "srt", "enable": 1, "url": "srt://example.com"},
+                # No rtmp entry
+            ],
+        }
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        descriptions = {desc.key: desc for desc in BINARY_SENSOR_DESCRIPTIONS}
+
+        binary_sensor = ZowietekBinarySensor(coordinator, descriptions["rtmp_enabled"])
+
+        assert binary_sensor.is_on is False
+
 
 class TestBinarySensorSetup:
     """Tests for binary sensor platform setup."""

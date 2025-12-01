@@ -25,17 +25,15 @@ _LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, kw_only=True)
-class ZowietekSwitchEntityDescription(  # type: ignore[override]
-    SwitchEntityDescription,
-):
+class ZowietekSwitchEntityDescription(SwitchEntityDescription):  # type: ignore[override]
     """Describes a Zowietek switch entity.
 
     Extends SwitchEntityDescription with stream_type to identify
     which streaming protocol this switch controls.
 
-    The type: ignore[override] is needed because frozen dataclasses
-    generate __replace__ methods with incompatible signatures when
-    extending other dataclasses. This is a known mypy limitation.
+    The type: ignore[override] is required because frozen dataclasses with
+    additional fields generate __replace__ methods with incompatible signatures
+    when extending other frozen dataclasses.
     """
 
     stream_type: str

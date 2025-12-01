@@ -1202,3 +1202,149 @@ class TestZowietekClientContextManager:
                 pass
 
             mock_session.close.assert_called_once()
+
+
+class TestZowietekClientVencInfo:
+    """Tests for ZowietekClient venc info endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_async_get_venc_info_success(self) -> None:
+        """Test successful venc info retrieval."""
+        mock_response = _create_mock_response(
+            {
+                "status": STATUS_SUCCESS,
+                "rsp": "succeed",
+                "venc": [
+                    {
+                        "venc_chnid": 0,
+                        "codec": {"selected_id": 0, "codec_list": ["H.264", "H.265"]},
+                        "bitrate": 12000000,
+                        "width": 1920,
+                        "height": 1080,
+                        "framerate": 60,
+                        "desc": "main",
+                    },
+                ],
+            }
+        )
+        mock_session = _create_mock_session(mock_response)
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
+
+        result = await client.async_get_venc_info()
+
+        assert "venc" in result
+        assert len(result["venc"]) == 1
+        assert result["venc"][0]["width"] == 1920
+
+
+class TestZowietekClientAudioInfo:
+    """Tests for ZowietekClient audio info endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_async_get_audio_info_success(self) -> None:
+        """Test successful audio info retrieval."""
+        mock_response = _create_mock_response(
+            {
+                "status": STATUS_SUCCESS,
+                "rsp": "succeed",
+                "all": {
+                    "switch": 1,
+                    "ai_type": {
+                        "selected_id": 0,
+                        "ai_type_list": ["LINE IN", "HDMI IN"],
+                    },
+                    "volume": 100,
+                },
+            }
+        )
+        mock_session = _create_mock_session(mock_response)
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
+
+        result = await client.async_get_audio_info()
+
+        assert result["switch"] == 1
+        assert result["volume"] == 100
+
+
+class TestZowietekClientSysAttrInfo:
+    """Tests for ZowietekClient sys attr info endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_async_get_sys_attr_info_success(self) -> None:
+        """Test successful sys attr info retrieval."""
+        mock_response = _create_mock_response(
+            {
+                "status": STATUS_SUCCESS,
+                "rsp": "succeed",
+                "data": {
+                    "SN": "ZBOX-12345",
+                    "device_name": "ZowieBox-Studio",
+                    "firmware_version": "1.2.3",
+                    "hardware_version": "2.0",
+                    "model": "ZowieBox-4K",
+                    "manufacturer": "Zowietek",
+                },
+            }
+        )
+        mock_session = _create_mock_session(mock_response)
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
+
+        result = await client.async_get_sys_attr_info()
+
+        assert result["SN"] == "ZBOX-12345"
+        assert result["firmware_version"] == "1.2.3"
+
+
+class TestZowietekClientDashboardInfo:
+    """Tests for ZowietekClient dashboard info endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_async_get_dashboard_info_success(self) -> None:
+        """Test successful dashboard info retrieval."""
+        mock_response = _create_mock_response(
+            {
+                "status": STATUS_SUCCESS,
+                "rsp": "succeed",
+                "data": {
+                    "persistent_time": "02:30:15",
+                    "device_strat_time": "2025-11-30 10:00:00",
+                    "cpu_temp": 45.5,
+                    "cpu_payload": 25.0,
+                    "memory_info": {
+                        "used": 512,
+                        "total": 1024,
+                    },
+                },
+            }
+        )
+        mock_session = _create_mock_session(mock_response)
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
+
+        result = await client.async_get_dashboard_info()
+
+        assert result["persistent_time"] == "02:30:15"
+        assert result["cpu_temp"] == 45.5

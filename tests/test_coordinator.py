@@ -634,3 +634,169 @@ class TestZowietekCoordinatorDeviceInfo:
 
         # Should fall back to config entry title since no machinename
         assert coordinator.device_name == "Test ZowieBox"
+
+
+class TestZowietekCoordinatorOptionalEndpointAuthError:
+    """Tests for optional endpoint auth error re-raising."""
+
+    async def test_optional_endpoint_auth_error_reraises(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test that auth errors from optional endpoints are re-raised.
+
+        Even optional endpoints should fail fast on auth errors since
+        the credentials are invalid for the entire device.
+        """
+        mock_config_entry.add_to_hass(hass)
+
+        # Auth error on optional endpoint (sys_attr_info) should still raise
+        mock_zowietek_client.async_get_sys_attr_info = AsyncMock(
+            side_effect=ZowietekAuthError("Authentication failed")
+        )
+        # Also mock the required ones to be available
+        mock_zowietek_client.async_get_dashboard_info = AsyncMock(return_value={})
+
+        coordinator = ZowietekCoordinator(hass, mock_config_entry)
+
+        with pytest.raises(ConfigEntryAuthFailed):
+            await _refresh_coordinator(coordinator)
+
+
+class TestZowietekCoordinatorVencParsing:
+    """Tests for venc info parsing edge cases."""
+
+    async def test_venc_empty_list_returns_none(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test that empty venc list is handled gracefully."""
+        mock_config_entry.add_to_hass(hass)
+
+        # Return empty venc list
+        mock_zowietek_client.async_get_venc_info.return_value = {"venc": []}
+
+        coordinator = ZowietekCoordinator(hass, mock_config_entry)
+        await _refresh_coordinator(coordinator)
+
+        # Video info should have empty/default values when no venc
+        assert coordinator.data.video.get("enc_resolution") in (None, "")
+        assert coordinator.data.video.get("enc_type") in (None, "")
+
+    async def test_venc_not_list_returns_none(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test that non-list venc is handled gracefully."""
+        mock_config_entry.add_to_hass(hass)
+
+        # Return venc as non-list (e.g., dict or None)
+        mock_zowietek_client.async_get_venc_info.return_value = {"venc": None}
+
+        coordinator = ZowietekCoordinator(hass, mock_config_entry)
+        await _refresh_coordinator(coordinator)
+
+        # Should succeed with empty/default values
+        assert isinstance(coordinator.data, ZowietekData)
+
+    async def test_venc_fallback_to_first_channel(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test fallback to first venc channel when no 'main' desc found."""
+        mock_config_entry.add_to_hass(hass)
+
+        # Return venc list without "main" desc - should use first channel
+        mock_zowietek_client.async_get_venc_info.return_value = {
+            "venc": [
+                {
+                    "venc_chnid": 0,
+                    "codec": {"selected_id": 0, "codec_list": ["H.264"]},
+                    "bitrate": 8000000,
+                    "width": 1280,
+                    "height": 720,
+                    "framerate": 30,
+                    "desc": "sub",  # Not "main"
+                },
+            ]
+        }
+
+        coordinator = ZowietekCoordinator(hass, mock_config_entry)
+        await _refresh_coordinator(coordinator)
+
+        # Should use first channel values
+        assert coordinator.data.video["enc_resolution"] == "1280x720"
+        assert coordinator.data.video["enc_framerate"] == 30
+
+    async def test_venc_first_element_not_dict(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test handling when first venc element is not a dict."""
+        mock_config_entry.add_to_hass(hass)
+
+        # Return venc list with non-dict first element
+        mock_zowietek_client.async_get_venc_info.return_value = {
+            "venc": ["not a dict", {"desc": "main"}]
+        }
+
+        coordinator = ZowietekCoordinator(hass, mock_config_entry)
+        await _refresh_coordinator(coordinator)
+
+        # Should handle gracefully (uses second element which has "main")
+        assert isinstance(coordinator.data, ZowietekData)
+
+    async def test_venc_first_element_not_dict_no_main(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test handling when first venc element is not a dict and no 'main' exists."""
+        mock_config_entry.add_to_hass(hass)
+
+        # Return venc list with non-dict first element and no "main" desc
+        mock_zowietek_client.async_get_venc_info.return_value = {"venc": ["not a dict"]}
+
+        coordinator = ZowietekCoordinator(hass, mock_config_entry)
+        await _refresh_coordinator(coordinator)
+
+        # Should handle gracefully - first element isn't dict so _get_main_encoder returns None
+        assert isinstance(coordinator.data, ZowietekData)
+
+
+class TestZowietekCoordinatorInputSignal:
+    """Tests for input signal handling edge cases."""
+
+    async def test_input_signal_with_signal_key(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test handling input signal with 'signal' key instead of 'hdmi_signal'."""
+        mock_config_entry.add_to_hass(hass)
+
+        # Return input signal with 'signal' key
+        mock_zowietek_client.async_get_input_signal.return_value = {
+            "signal": 1,  # Legacy key
+            "width": 1920,
+            "height": 1080,
+            "framerate": 60,
+        }
+
+        coordinator = ZowietekCoordinator(hass, mock_config_entry)
+        await _refresh_coordinator(coordinator)
+
+        # Should process the signal key
+        assert coordinator.data.video.get("input_signal") == 1

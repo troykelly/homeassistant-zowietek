@@ -486,3 +486,25 @@ class TestZowietekCoordinatorDeviceInfo:
 
         # Should fall back to config entry unique_id
         assert coordinator.device_id == "zowiebox-test-12345"
+
+    async def test_device_name_fallback_to_title(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test device_name falls back to config entry title if not in data."""
+        mock_config_entry.add_to_hass(hass)
+
+        # Device info without device name
+        mock_zowietek_client.async_get_device_info.return_value = {
+            "status": "00000",
+            "rsp": "succeed",
+            "devicesn": "zowiebox-test-12345",
+        }
+
+        coordinator = ZowietekCoordinator(hass, mock_config_entry)
+        await _refresh_coordinator(coordinator)
+
+        # Should fall back to config entry title
+        assert coordinator.device_name == "Test ZowieBox"

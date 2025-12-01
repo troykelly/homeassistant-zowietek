@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from types import TracebackType
 from typing import TYPE_CHECKING, cast
@@ -29,6 +30,7 @@ DEFAULT_TIMEOUT = 10
 STATUS_NOT_LOGGED_IN = "80003"
 STATUS_WRONG_PASSWORD = "80005"
 STATUS_INVALID_PARAMS = "00003"
+STATUS_MPP_RESTART = "10000"  # Device is restarting media processing pipeline
 
 
 class ZowietekClient:
@@ -180,7 +182,7 @@ class ZowietekClient:
         """
         try:
             data: dict[str, Any] = await response.json()
-        except aiohttp.ContentTypeError as err:
+        except (aiohttp.ContentTypeError, json.JSONDecodeError) as err:
             raise ZowietekApiError(f"Invalid JSON response from device: {err}") from err
 
         status = str(data.get("status", ""))
@@ -195,7 +197,10 @@ class ZowietekClient:
                 status_code=STATUS_INVALID_PARAMS,
             )
 
-        if status != STATUS_SUCCESS:
+        # Status 10000 "mpp restart..." indicates the device is restarting its
+        # media processing pipeline. This is a successful operation that occurs
+        # when changing encoder codecs or other settings that require a restart.
+        if status not in (STATUS_SUCCESS, STATUS_MPP_RESTART):
             rsp = data.get("rsp", "Unknown error")
             raise ZowietekApiError(
                 f"API returned error status {status}: {rsp}",
@@ -457,14 +462,26 @@ class ZowietekClient:
     async def async_reboot(self) -> None:
         """Reboot the device.
 
+        The device may close the connection before responding, return an empty
+        response, or timeout during a reboot. These are all expected behaviors
+        and should not raise exceptions.
+
         Raises:
-            ZowietekAuthError: If authentication fails.
+            ZowietekAuthError: If authentication fails (before reboot starts).
         """
-        await self._request(
-            "/system?option=setinfo",
-            {"group": "syscontrol", "opt": "set_reboot_info"},
-            requires_auth=True,
-        )
+        try:
+            await self._request(
+                "/system?option=setinfo",
+                {
+                    "group": "syscontrol",
+                    "opt": "set_reboot_info",
+                    "data": {"command": "reboot"},
+                },
+                requires_auth=True,
+            )
+        except (ZowietekConnectionError, ZowietekTimeoutError, ZowietekApiError):
+            # Expected during reboot - device may close connection or not respond
+            _LOGGER.debug("Reboot command sent, device may have disconnected")
 
     async def async_set_ndi_enabled(self, enabled: bool) -> None:
         """Enable or disable NDI streaming.
@@ -531,6 +548,51 @@ class ZowietekClient:
                 "group": "publish",
                 "opt": "update_publish_switch",
                 "data": {"index": stream_index, "switch": 1 if enabled else 0},
+            },
+            requires_auth=True,
+        )
+
+    async def async_set_encoder_codec(self, codec_id: int) -> None:
+        """Set the encoder codec type.
+
+        Args:
+            codec_id: The codec index (0=H.264, 1=H.265, 2=MJPEG typically).
+
+        Raises:
+            ZowietekAuthError: If authentication fails.
+            ZowietekApiError: If the codec ID is invalid.
+        """
+        await self._request(
+            "/video?option=setinfo",
+            {
+                "group": "venc",
+                "venc": [
+                    {
+                        "venc_chnid": 0,
+                        "codec": {"selected_id": codec_id},
+                        "desc": "main",
+                    },
+                ],
+            },
+            requires_auth=True,
+        )
+
+    async def async_set_ndi_mode(self, mode_id: int) -> None:
+        """Set the NDI mode.
+
+        Args:
+            mode_id: The NDI mode (1=NDI|HX, 2=NDI|HX2, 3=NDI|HX3).
+
+        Raises:
+            ZowietekAuthError: If authentication fails.
+            ZowietekApiError: If the mode ID is invalid.
+        """
+        await self._request(
+            "/video?option=setinfo",
+            {
+                "group": "ndi",
+                "opt": "set_ndi_info",
+                "data": {"mode_id": mode_id},
             },
             requires_auth=True,
         )

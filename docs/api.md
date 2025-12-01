@@ -739,14 +739,30 @@ Operations:
 
 ## 22. Restore & Reboot – /system
 
-Typical opt values:
+### 22.1 Reboot device
 
-- `reboot` – reboot device
+- **Endpoint:** `POST /system?option=setinfo&login_check_flag=1`
+- **Body:**
+
+```json
+{
+  "group": "syscontrol",
+  "opt": "set_reboot_info",
+  "data": {
+    "command": "reboot"
+  }
+}
+```
+
+**Note:** The device may close the connection before responding, return an empty response, or timeout during reboot. These are expected behaviors.
+
+### 22.2 Other system operations
+
+Additional opt values for the `syscontrol` group:
+
 - `factory_reset` – restore factory defaults
 - `standby` – go to low-power standby
 - `exit_standby` – wake from standby
-
-Use `POST /system?option=setinfo&login_check_flag=1`.
 
 ---
 

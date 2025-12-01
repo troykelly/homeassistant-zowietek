@@ -300,8 +300,8 @@ class TestButtonEntityStrings:
 class TestSelectEntityStrings:
     """Test select entity translation strings.
 
-    Select entities are defined in the issue but not yet implemented.
-    These translations are included for future use.
+    Select entities provide user-selectable options for encoder type
+    and output format settings.
     """
 
     def test_entity_select_section_exists(self, strings_data: dict[str, object]) -> None:
@@ -310,28 +310,6 @@ class TestSelectEntityStrings:
         assert isinstance(entity, dict), "entity section must exist"
         select = entity.get("select")
         assert isinstance(select, dict), "entity.select section must exist"
-
-    def test_select_has_video_mode(self, strings_data: dict[str, object]) -> None:
-        """Test that select has video_mode translation."""
-        entity = strings_data.get("entity")
-        assert isinstance(entity, dict)
-        select = entity.get("select")
-        assert isinstance(select, dict)
-        assert "video_mode" in select, "entity.select must have video_mode"
-        video_mode = select["video_mode"]
-        assert isinstance(video_mode, dict)
-        assert "name" in video_mode
-
-    def test_select_has_resolution(self, strings_data: dict[str, object]) -> None:
-        """Test that select has resolution translation."""
-        entity = strings_data.get("entity")
-        assert isinstance(entity, dict)
-        select = entity.get("select")
-        assert isinstance(select, dict)
-        assert "resolution" in select, "entity.select must have resolution"
-        resolution = select["resolution"]
-        assert isinstance(resolution, dict)
-        assert "name" in resolution
 
     def test_select_has_encoder_type(self, strings_data: dict[str, object]) -> None:
         """Test that select has encoder_type translation."""
@@ -343,3 +321,14 @@ class TestSelectEntityStrings:
         encoder_type = select["encoder_type"]
         assert isinstance(encoder_type, dict)
         assert "name" in encoder_type
+
+    def test_select_has_output_format(self, strings_data: dict[str, object]) -> None:
+        """Test that select has output_format translation."""
+        entity = strings_data.get("entity")
+        assert isinstance(entity, dict)
+        select = entity.get("select")
+        assert isinstance(select, dict)
+        assert "output_format" in select, "entity.select must have output_format"
+        output_format = select["output_format"]
+        assert isinstance(output_format, dict)
+        assert "name" in output_format

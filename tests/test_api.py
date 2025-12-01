@@ -123,98 +123,114 @@ class TestZowietekClientInit:
         assert client._owns_session is True
 
 
+def _create_mock_response(
+    data: dict[str, str | int | bool],
+    status: int = 200,
+) -> MagicMock:
+    """Create a mock aiohttp response.
+
+    Args:
+        data: JSON data to return from response.json().
+        status: HTTP status code.
+
+    Returns:
+        Mock response object.
+    """
+    mock_response = MagicMock()
+    mock_response.status = status
+    mock_response.json = AsyncMock(return_value=data)
+    return mock_response
+
+
+def _create_mock_session(
+    response: MagicMock | Exception,
+) -> MagicMock:
+    """Create a mock aiohttp session.
+
+    Args:
+        response: The response to return from post() or exception to raise.
+
+    Returns:
+        Mock session object.
+    """
+    mock_session = MagicMock(spec=aiohttp.ClientSession)
+    mock_session.closed = False
+    mock_session.close = AsyncMock()
+
+    if isinstance(response, Exception):
+        mock_session.post = AsyncMock(side_effect=response)
+    else:
+        mock_session.post = AsyncMock(return_value=response)
+
+    return mock_session
+
+
 class TestZowietekClientAuthentication:
     """Tests for ZowietekClient authentication."""
 
     @pytest.mark.asyncio
     async def test_async_login_success(self) -> None:
         """Test successful authentication."""
+        mock_response = _create_mock_response({"status": STATUS_SUCCESS, "rsp": "succeed"})
+        mock_session = _create_mock_session(mock_response)
+
         client = ZowietekClient(
             host="192.168.1.100",
             username="admin",
             password="admin",
+            session=mock_session,
         )
 
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response.json = AsyncMock(return_value={"status": STATUS_SUCCESS, "rsp": "succeed"})
+        result = await client.async_login()
 
-        with patch.object(
-            client, "_request", new_callable=AsyncMock, return_value=mock_response
-        ) as mock_request:
-            result = await client.async_login()
-
-            assert result is True
-            mock_request.assert_called_once()
-
-        await client.close()
+        assert result is True
+        mock_session.post.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_async_login_failure_wrong_credentials(self) -> None:
         """Test authentication failure with wrong credentials."""
+        mock_response = _create_mock_response({"status": STATUS_NOT_LOGGED_IN, "rsp": "failed"})
+        mock_session = _create_mock_session(mock_response)
+
         client = ZowietekClient(
             host="192.168.1.100",
             username="admin",
             password="wrong",
+            session=mock_session,
         )
 
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response.json = AsyncMock(
-            return_value={"status": STATUS_NOT_LOGGED_IN, "rsp": "failed"}
-        )
-
-        with (
-            patch.object(client, "_request", new_callable=AsyncMock, return_value=mock_response),
-            pytest.raises(ZowietekAuthError),
-        ):
+        with pytest.raises(ZowietekAuthError):
             await client.async_login()
-
-        await client.close()
 
     @pytest.mark.asyncio
     async def test_async_login_connection_refused(self) -> None:
         """Test authentication when connection is refused."""
+        mock_session = _create_mock_session(aiohttp.ClientConnectionError("Connection refused"))
+
         client = ZowietekClient(
             host="192.168.1.100",
             username="admin",
             password="admin",
+            session=mock_session,
         )
 
-        with (
-            patch.object(
-                client,
-                "_request",
-                new_callable=AsyncMock,
-                side_effect=aiohttp.ClientConnectionError("Connection refused"),
-            ),
-            pytest.raises(ZowietekConnectionError),
-        ):
+        with pytest.raises(ZowietekConnectionError):
             await client.async_login()
-
-        await client.close()
 
     @pytest.mark.asyncio
     async def test_async_login_timeout(self) -> None:
         """Test authentication timeout."""
+        mock_session = _create_mock_session(TimeoutError())
+
         client = ZowietekClient(
             host="192.168.1.100",
             username="admin",
             password="admin",
+            session=mock_session,
         )
 
-        with (
-            patch.object(
-                client,
-                "_request",
-                new_callable=AsyncMock,
-                side_effect=TimeoutError(),
-            ),
-            pytest.raises(ZowietekTimeoutError),
-        ):
+        with pytest.raises(ZowietekTimeoutError):
             await client.async_login()
-
-        await client.close()
 
 
 class TestZowietekClientSystemInfo:
@@ -223,12 +239,6 @@ class TestZowietekClientSystemInfo:
     @pytest.mark.asyncio
     async def test_async_get_system_info_success(self) -> None:
         """Test successful system info retrieval."""
-        client = ZowietekClient(
-            host="192.168.1.100",
-            username="admin",
-            password="admin",
-        )
-
         expected_response: ZowietekSystemInfo = {
             "status": STATUS_SUCCESS,
             "rsp": "succeed",
@@ -239,42 +249,37 @@ class TestZowietekClientSystemInfo:
             "mac_address": "00:11:22:33:44:55",
             "model": "ZowieBox 4K",
         }
+        mock_response = _create_mock_response(expected_response)
+        mock_session = _create_mock_session(mock_response)
 
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response.json = AsyncMock(return_value=expected_response)
-
-        with patch.object(client, "_request", new_callable=AsyncMock, return_value=mock_response):
-            result = await client.async_get_system_info()
-
-            assert result["status"] == STATUS_SUCCESS
-            assert result["device_name"] == "ZowieBox-Test"
-            assert result["firmware_version"] == "1.0.0"
-
-        await client.close()
-
-    @pytest.mark.asyncio
-    async def test_async_get_system_info_auth_required(self) -> None:
-        """Test system info when not authenticated."""
         client = ZowietekClient(
             host="192.168.1.100",
             username="admin",
             password="admin",
+            session=mock_session,
         )
 
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response.json = AsyncMock(
-            return_value={"status": STATUS_NOT_LOGGED_IN, "rsp": "failed"}
+        result = await client.async_get_system_info()
+
+        assert result["status"] == STATUS_SUCCESS
+        assert result["device_name"] == "ZowieBox-Test"
+        assert result["firmware_version"] == "1.0.0"
+
+    @pytest.mark.asyncio
+    async def test_async_get_system_info_auth_required(self) -> None:
+        """Test system info when not authenticated."""
+        mock_response = _create_mock_response({"status": STATUS_NOT_LOGGED_IN, "rsp": "failed"})
+        mock_session = _create_mock_session(mock_response)
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
         )
 
-        with (
-            patch.object(client, "_request", new_callable=AsyncMock, return_value=mock_response),
-            pytest.raises(ZowietekAuthError),
-        ):
+        with pytest.raises(ZowietekAuthError):
             await client.async_get_system_info()
-
-        await client.close()
 
 
 class TestZowietekClientVideoInfo:
@@ -283,12 +288,6 @@ class TestZowietekClientVideoInfo:
     @pytest.mark.asyncio
     async def test_async_get_video_info_success(self) -> None:
         """Test successful video info retrieval."""
-        client = ZowietekClient(
-            host="192.168.1.100",
-            username="admin",
-            password="admin",
-        )
-
         expected_response: ZowietekVideoInfo = {
             "status": STATUS_SUCCESS,
             "rsp": "succeed",
@@ -299,19 +298,21 @@ class TestZowietekClientVideoInfo:
             "output_format": "1080p60",
             "loop_out_enabled": True,
         }
+        mock_response = _create_mock_response(expected_response)
+        mock_session = _create_mock_session(mock_response)
 
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response.json = AsyncMock(return_value=expected_response)
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
 
-        with patch.object(client, "_request", new_callable=AsyncMock, return_value=mock_response):
-            result = await client.async_get_video_info()
+        result = await client.async_get_video_info()
 
-            assert result["status"] == STATUS_SUCCESS
-            assert result["input_width"] == 1920
-            assert result["input_height"] == 1080
-
-        await client.close()
+        assert result["status"] == STATUS_SUCCESS
+        assert result["input_width"] == 1920
+        assert result["input_height"] == 1080
 
 
 class TestZowietekClientAudioInfo:
@@ -320,12 +321,6 @@ class TestZowietekClientAudioInfo:
     @pytest.mark.asyncio
     async def test_async_get_audio_info_success(self) -> None:
         """Test successful audio info retrieval."""
-        client = ZowietekClient(
-            host="192.168.1.100",
-            username="admin",
-            password="admin",
-        )
-
         expected_response: ZowietekAudioInfo = {
             "status": STATUS_SUCCESS,
             "rsp": "succeed",
@@ -336,19 +331,21 @@ class TestZowietekClientAudioInfo:
             "bitrate": 128,
             "volume": 80,
         }
+        mock_response = _create_mock_response(expected_response)
+        mock_session = _create_mock_session(mock_response)
 
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response.json = AsyncMock(return_value=expected_response)
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
 
-        with patch.object(client, "_request", new_callable=AsyncMock, return_value=mock_response):
-            result = await client.async_get_audio_info()
+        result = await client.async_get_audio_info()
 
-            assert result["status"] == STATUS_SUCCESS
-            assert result["volume"] == 80
-            assert result["codec"] == "aac"
-
-        await client.close()
+        assert result["status"] == STATUS_SUCCESS
+        assert result["volume"] == 80
+        assert result["codec"] == "aac"
 
 
 class TestZowietekClientStreamInfo:
@@ -357,12 +354,6 @@ class TestZowietekClientStreamInfo:
     @pytest.mark.asyncio
     async def test_async_get_stream_info_success(self) -> None:
         """Test successful stream info retrieval."""
-        client = ZowietekClient(
-            host="192.168.1.100",
-            username="admin",
-            password="admin",
-        )
-
         expected_response: ZowietekStreamInfo = {
             "status": STATUS_SUCCESS,
             "rsp": "succeed",
@@ -373,19 +364,21 @@ class TestZowietekClientStreamInfo:
             "srt_enabled": False,
             "srt_url": "",
         }
+        mock_response = _create_mock_response(expected_response)
+        mock_session = _create_mock_session(mock_response)
 
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response.json = AsyncMock(return_value=expected_response)
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
 
-        with patch.object(client, "_request", new_callable=AsyncMock, return_value=mock_response):
-            result = await client.async_get_stream_info()
+        result = await client.async_get_stream_info()
 
-            assert result["status"] == STATUS_SUCCESS
-            assert result["ndi_enabled"] is True
-            assert result["ndi_name"] == "ZowieBox-Test"
-
-        await client.close()
+        assert result["status"] == STATUS_SUCCESS
+        assert result["ndi_enabled"] is True
+        assert result["ndi_name"] == "ZowieBox-Test"
 
 
 class TestZowietekClientNetworkInfo:
@@ -394,12 +387,6 @@ class TestZowietekClientNetworkInfo:
     @pytest.mark.asyncio
     async def test_async_get_network_info_success(self) -> None:
         """Test successful network info retrieval."""
-        client = ZowietekClient(
-            host="192.168.1.100",
-            username="admin",
-            password="admin",
-        )
-
         expected_response: ZowietekNetworkInfo = {
             "status": STATUS_SUCCESS,
             "rsp": "succeed",
@@ -409,19 +396,21 @@ class TestZowietekClientNetworkInfo:
             "dhcp_enabled": False,
             "mac_address": "00:11:22:33:44:55",
         }
+        mock_response = _create_mock_response(expected_response)
+        mock_session = _create_mock_session(mock_response)
 
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response.json = AsyncMock(return_value=expected_response)
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
 
-        with patch.object(client, "_request", new_callable=AsyncMock, return_value=mock_response):
-            result = await client.async_get_network_info()
+        result = await client.async_get_network_info()
 
-            assert result["status"] == STATUS_SUCCESS
-            assert result["ip_address"] == "192.168.1.100"
-            assert result["dhcp_enabled"] is False
-
-        await client.close()
+        assert result["status"] == STATUS_SUCCESS
+        assert result["ip_address"] == "192.168.1.100"
+        assert result["dhcp_enabled"] is False
 
 
 class TestZowietekClientWriteOperations:
@@ -430,98 +419,90 @@ class TestZowietekClientWriteOperations:
     @pytest.mark.asyncio
     async def test_async_set_ndi_enabled_true(self) -> None:
         """Test enabling NDI stream."""
+        mock_response = _create_mock_response({"status": STATUS_SUCCESS, "rsp": "succeed"})
+        mock_session = _create_mock_session(mock_response)
+
         client = ZowietekClient(
             host="192.168.1.100",
             username="admin",
             password="admin",
+            session=mock_session,
         )
 
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response.json = AsyncMock(return_value={"status": STATUS_SUCCESS, "rsp": "succeed"})
+        await client.async_set_ndi_enabled(True)
 
-        with patch.object(
-            client, "_request", new_callable=AsyncMock, return_value=mock_response
-        ) as mock_request:
-            await client.async_set_ndi_enabled(True)
-
-            mock_request.assert_called_once()
-            call_args = mock_request.call_args
-            assert "ndi" in call_args[0][0].lower() or "stream" in call_args[0][0].lower()
-
-        await client.close()
+        mock_session.post.assert_called_once()
+        call_args = mock_session.post.call_args
+        url = call_args[0][0]
+        assert "stream" in url.lower()
 
     @pytest.mark.asyncio
     async def test_async_set_ndi_enabled_false(self) -> None:
         """Test disabling NDI stream."""
+        mock_response = _create_mock_response({"status": STATUS_SUCCESS, "rsp": "succeed"})
+        mock_session = _create_mock_session(mock_response)
+
         client = ZowietekClient(
             host="192.168.1.100",
             username="admin",
             password="admin",
+            session=mock_session,
         )
 
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response.json = AsyncMock(return_value={"status": STATUS_SUCCESS, "rsp": "succeed"})
+        await client.async_set_ndi_enabled(False)
 
-        with patch.object(client, "_request", new_callable=AsyncMock, return_value=mock_response):
-            await client.async_set_ndi_enabled(False)
-
-        await client.close()
+        mock_session.post.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_async_set_rtmp_enabled(self) -> None:
         """Test setting RTMP enabled status."""
+        mock_response = _create_mock_response({"status": STATUS_SUCCESS, "rsp": "succeed"})
+        mock_session = _create_mock_session(mock_response)
+
         client = ZowietekClient(
             host="192.168.1.100",
             username="admin",
             password="admin",
+            session=mock_session,
         )
 
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response.json = AsyncMock(return_value={"status": STATUS_SUCCESS, "rsp": "succeed"})
+        await client.async_set_rtmp_enabled(True)
 
-        with patch.object(client, "_request", new_callable=AsyncMock, return_value=mock_response):
-            await client.async_set_rtmp_enabled(True)
-
-        await client.close()
+        mock_session.post.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_async_set_srt_enabled(self) -> None:
         """Test setting SRT enabled status."""
+        mock_response = _create_mock_response({"status": STATUS_SUCCESS, "rsp": "succeed"})
+        mock_session = _create_mock_session(mock_response)
+
         client = ZowietekClient(
             host="192.168.1.100",
             username="admin",
             password="admin",
+            session=mock_session,
         )
 
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response.json = AsyncMock(return_value={"status": STATUS_SUCCESS, "rsp": "succeed"})
+        await client.async_set_srt_enabled(True)
 
-        with patch.object(client, "_request", new_callable=AsyncMock, return_value=mock_response):
-            await client.async_set_srt_enabled(True)
-
-        await client.close()
+        mock_session.post.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_async_reboot(self) -> None:
         """Test device reboot command."""
+        mock_response = _create_mock_response({"status": STATUS_SUCCESS, "rsp": "succeed"})
+        mock_session = _create_mock_session(mock_response)
+
         client = ZowietekClient(
             host="192.168.1.100",
             username="admin",
             password="admin",
+            session=mock_session,
         )
 
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response.json = AsyncMock(return_value={"status": STATUS_SUCCESS, "rsp": "succeed"})
+        await client.async_reboot()
 
-        with patch.object(client, "_request", new_callable=AsyncMock, return_value=mock_response):
-            await client.async_reboot()
-
-        await client.close()
+        mock_session.post.assert_called_once()
 
 
 class TestZowietekClientErrorHandling:
@@ -530,92 +511,70 @@ class TestZowietekClientErrorHandling:
     @pytest.mark.asyncio
     async def test_api_error_invalid_params(self) -> None:
         """Test handling of invalid parameters error."""
+        mock_response = _create_mock_response({"status": STATUS_INVALID_PARAMS, "rsp": "failed"})
+        mock_session = _create_mock_session(mock_response)
+
         client = ZowietekClient(
             host="192.168.1.100",
             username="admin",
             password="admin",
+            session=mock_session,
         )
 
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response.json = AsyncMock(
-            return_value={"status": STATUS_INVALID_PARAMS, "rsp": "failed"}
-        )
+        with pytest.raises(ZowietekApiError) as exc_info:
+            await client.async_get_system_info()
 
-        with patch.object(client, "_request", new_callable=AsyncMock, return_value=mock_response):
-            with pytest.raises(ZowietekApiError) as exc_info:
-                await client.async_get_system_info()
-
-            assert exc_info.value.status_code == STATUS_INVALID_PARAMS
-
-        await client.close()
+        assert exc_info.value.status_code == STATUS_INVALID_PARAMS
 
     @pytest.mark.asyncio
     async def test_connection_error_handling(self) -> None:
         """Test handling of connection errors."""
+        mock_session = _create_mock_session(aiohttp.ClientConnectionError("Connection failed"))
+
         client = ZowietekClient(
             host="192.168.1.100",
             username="admin",
             password="admin",
+            session=mock_session,
         )
 
-        with (
-            patch.object(
-                client,
-                "_request",
-                new_callable=AsyncMock,
-                side_effect=aiohttp.ClientConnectionError("Connection failed"),
-            ),
-            pytest.raises(ZowietekConnectionError),
-        ):
+        with pytest.raises(ZowietekConnectionError):
             await client.async_get_system_info()
-
-        await client.close()
 
     @pytest.mark.asyncio
     async def test_timeout_error_handling(self) -> None:
         """Test handling of timeout errors."""
+        mock_session = _create_mock_session(TimeoutError())
+
         client = ZowietekClient(
             host="192.168.1.100",
             username="admin",
             password="admin",
+            session=mock_session,
         )
 
-        with (
-            patch.object(
-                client,
-                "_request",
-                new_callable=AsyncMock,
-                side_effect=TimeoutError(),
-            ),
-            pytest.raises(ZowietekTimeoutError),
-        ):
+        with pytest.raises(ZowietekTimeoutError):
             await client.async_get_system_info()
-
-        await client.close()
 
     @pytest.mark.asyncio
     async def test_invalid_json_response(self) -> None:
         """Test handling of invalid JSON response."""
-        client = ZowietekClient(
-            host="192.168.1.100",
-            username="admin",
-            password="admin",
-        )
-
         mock_response = MagicMock()
         mock_response.status = 200
         mock_response.json = AsyncMock(
             side_effect=aiohttp.ContentTypeError(MagicMock(), MagicMock(), message="Invalid JSON")
         )
+        mock_session = _create_mock_session(mock_response)
 
-        with (
-            patch.object(client, "_request", new_callable=AsyncMock, return_value=mock_response),
-            pytest.raises(ZowietekApiError),
-        ):
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
+
+        with pytest.raises(ZowietekApiError):
             await client.async_get_system_info()
-
-        await client.close()
 
 
 class TestZowietekClientSessionManagement:
@@ -663,8 +622,6 @@ class TestZowietekClientSessionManagement:
         session = await client._get_session()
         assert session is mock_session
 
-        await client.close()
-
     @pytest.mark.asyncio
     async def test_close_closes_owned_session(self) -> None:
         """Test that close() closes session when client owns it."""
@@ -678,8 +635,9 @@ class TestZowietekClientSessionManagement:
         mock_session.closed = False
         mock_session.close = AsyncMock()
 
-        client._session = mock_session
-        client._owns_session = True
+        # Manually set session for testing
+        object.__setattr__(client, "_session", mock_session)
+        object.__setattr__(client, "_owns_session", True)
 
         await client.close()
 
@@ -716,8 +674,9 @@ class TestZowietekClientSessionManagement:
         mock_session.closed = False
         mock_session.close = AsyncMock()
 
-        client._session = mock_session
-        client._owns_session = True
+        # Manually set session for testing
+        object.__setattr__(client, "_session", mock_session)
+        object.__setattr__(client, "_owns_session", True)
 
         await client.close()
         # Second call should not raise
@@ -749,21 +708,19 @@ class TestZowietekClientContextManager:
     @pytest.mark.asyncio
     async def test_context_manager_closes_owned_session(self) -> None:
         """Test that context manager closes owned session on exit."""
-        client = ZowietekClient(
-            host="192.168.1.100",
-            username="admin",
-            password="admin",
-        )
-
         mock_session = MagicMock()
         mock_session.closed = False
         mock_session.close = AsyncMock()
 
-        with patch.object(
-            client, "_get_session", new_callable=AsyncMock, return_value=mock_session
-        ):
-            client._session = mock_session
-            client._owns_session = True
+        with patch("aiohttp.ClientSession", return_value=mock_session):
+            client = ZowietekClient(
+                host="192.168.1.100",
+                username="admin",
+                password="admin",
+            )
+
+            # Trigger session creation
+            _ = await client._get_session()
 
             async with client:
                 pass

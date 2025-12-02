@@ -1682,3 +1682,84 @@ async def test_reconfigure_flow_general_api_error(
         assert result["type"] is FlowResultType.FORM
         assert result["step_id"] == "reconfigure"
         assert result["errors"] == {"base": "cannot_connect"}
+
+
+# =============================================================================
+# Tests for _derive_name_from_host
+# =============================================================================
+
+
+class TestDeriveNameFromHost:
+    """Tests for _derive_name_from_host static method."""
+
+    def test_derive_name_from_host_with_scheme(self) -> None:
+        """Test deriving name from host with scheme (http://)."""
+        from custom_components.zowietek.config_flow import ZowietekConfigFlow
+
+        result = ZowietekConfigFlow._derive_name_from_host("http://studio-encoder.local")
+        assert result == "ZowieBox (studio-encoder)"
+
+    def test_derive_name_from_host_with_port(self) -> None:
+        """Test deriving name from host with port number."""
+        from custom_components.zowietek.config_flow import ZowietekConfigFlow
+
+        result = ZowietekConfigFlow._derive_name_from_host("studio-encoder.local:8080")
+        assert result == "ZowieBox (studio-encoder)"
+
+    def test_derive_name_from_host_with_scheme_and_port(self) -> None:
+        """Test deriving name from host with both scheme and port."""
+        from custom_components.zowietek.config_flow import ZowietekConfigFlow
+
+        result = ZowietekConfigFlow._derive_name_from_host("http://studio-encoder.local:8080")
+        assert result == "ZowieBox (studio-encoder)"
+
+    def test_derive_name_from_ip_address(self) -> None:
+        """Test deriving name from IP address returns plain ZowieBox."""
+        from custom_components.zowietek.config_flow import ZowietekConfigFlow
+
+        result = ZowietekConfigFlow._derive_name_from_host("192.168.1.100")
+        assert result == "ZowieBox"
+
+    def test_derive_name_from_hostname_with_dots(self) -> None:
+        """Test deriving name from hostname with subdomains."""
+        from custom_components.zowietek.config_flow import ZowietekConfigFlow
+
+        result = ZowietekConfigFlow._derive_name_from_host("encoder.studio.company.local")
+        assert result == "ZowieBox (encoder)"
+
+    def test_derive_name_from_hostname_starting_with_digit(self) -> None:
+        """Test deriving name from hostname starting with digit."""
+        from custom_components.zowietek.config_flow import ZowietekConfigFlow
+
+        # Hostname starting with a digit - should fall through to plain ZowieBox
+        result = ZowietekConfigFlow._derive_name_from_host("123device.local")
+        assert result == "ZowieBox"
+
+
+# =============================================================================
+# Tests for credentials step edge case
+# =============================================================================
+
+
+class TestCredentialsStepEdgeCases:
+    """Tests for edge cases in credentials step."""
+
+    async def test_credentials_step_without_selected_device_redirects_to_manual(
+        self,
+        hass: HomeAssistant,
+        mock_setup_entry: AsyncMock,
+    ) -> None:
+        """Test credentials step redirects to manual when no device selected."""
+        from custom_components.zowietek.config_flow import ZowietekConfigFlow
+
+        # Create a flow and directly call async_step_credentials without setting _selected_device
+        flow = ZowietekConfigFlow()
+        flow.hass = hass
+        flow._selected_device = None  # Ensure no device is selected
+
+        # This should redirect to manual step
+        result = await flow.async_step_credentials()
+
+        # Should redirect to manual step
+        assert result["type"] is FlowResultType.FORM
+        assert result["step_id"] == "manual"

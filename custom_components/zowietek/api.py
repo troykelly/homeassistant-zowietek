@@ -897,6 +897,8 @@ class ZowietekClient:
     async def async_select_streamplay_source(self, index: int) -> None:
         """Select and activate a streamplay source by index.
 
+        Uses the streamplay_switch operation to enable the specified source.
+
         Args:
             index: Index of the source to activate.
 
@@ -908,8 +910,8 @@ class ZowietekClient:
             "/streamplay?option=setinfo",
             {
                 "group": "streamplay",
-                "opt": "streamplay_select",
-                "index": index,
+                "opt": "streamplay_switch",
+                "data": {"index": index, "switch": 1},
             },
             requires_auth=True,
         )
@@ -917,15 +919,34 @@ class ZowietekClient:
     async def async_stop_streamplay(self) -> None:
         """Stop current streamplay/decoder playback.
 
+        Finds the currently active source (switch=1) and disables it.
+
         Raises:
             ZowietekAuthError: If authentication fails.
             ZowietekApiError: If the operation fails.
         """
+        # First get all sources to find the active one
+        streamplay_info = await self.async_get_streamplay_info()
+        sources = streamplay_info.get("streamplay", [])
+
+        # Find the source with switch=1 (active)
+        active_index: int | None = None
+        for source in sources:
+            if isinstance(source, dict) and source.get("switch") == 1:
+                active_index = source.get("index")
+                break
+
+        if active_index is None:
+            # No active source, nothing to stop
+            return
+
+        # Disable the active source
         await self._request(
             "/streamplay?option=setinfo",
             {
                 "group": "streamplay",
-                "opt": "streamplay_stop",
+                "opt": "streamplay_switch",
+                "data": {"index": active_index, "switch": 0},
             },
             requires_auth=True,
         )

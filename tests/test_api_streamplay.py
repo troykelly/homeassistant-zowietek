@@ -596,8 +596,9 @@ class TestZowietekClientSelectStreamplaySource:
         call_args = mock_session.post.call_args
         json_data = call_args[1]["json"]
         assert json_data["group"] == "streamplay"
-        assert json_data["opt"] == "streamplay_select"
-        assert json_data["index"] == 0
+        assert json_data["opt"] == "streamplay_switch"
+        assert json_data["data"]["index"] == 0
+        assert json_data["data"]["switch"] == 1
         assert json_data["user"] == "admin"
 
     @pytest.mark.asyncio
@@ -622,7 +623,8 @@ class TestZowietekClientSelectStreamplaySource:
 
         call_args = mock_session.post.call_args
         json_data = call_args[1]["json"]
-        assert json_data["index"] == 2
+        assert json_data["data"]["index"] == 2
+        assert json_data["data"]["switch"] == 1
 
 
 class TestZowietekClientStopStreamplay:
@@ -630,14 +632,41 @@ class TestZowietekClientStopStreamplay:
 
     @pytest.mark.asyncio
     async def test_async_stop_streamplay_success(self) -> None:
-        """Test successfully stopping streamplay."""
-        mock_response = _create_mock_response(
+        """Test successfully stopping streamplay when a source is active."""
+        # Create responses for both API calls: get_streamplay_info and stop
+        get_response = _create_mock_response(
+            {
+                "status": STATUS_SUCCESS,
+                "rsp": "succeed",
+                "data": [
+                    {"index": 0, "switch": 0, "name": "Source 1"},
+                    {"index": 1, "switch": 1, "name": "Active Source"},  # Active
+                    {"index": 2, "switch": 0, "name": "Source 3"},
+                ],
+            }
+        )
+        stop_response = _create_mock_response(
             {
                 "status": STATUS_SUCCESS,
                 "rsp": "succeed",
             }
         )
-        mock_session = _create_mock_session(mock_response)
+
+        # Set up mock to return different responses for each call
+        mock_session = MagicMock(spec=aiohttp.ClientSession)
+        mock_session.closed = False
+        mock_session.close = AsyncMock()
+
+        # Create context managers for each call
+        get_cm = MagicMock()
+        get_cm.__aenter__ = AsyncMock(return_value=get_response)
+        get_cm.__aexit__ = AsyncMock(return_value=None)
+
+        stop_cm = MagicMock()
+        stop_cm.__aenter__ = AsyncMock(return_value=stop_response)
+        stop_cm.__aexit__ = AsyncMock(return_value=None)
+
+        mock_session.post = MagicMock(side_effect=[get_cm, stop_cm])
 
         client = ZowietekClient(
             host="192.168.1.100",
@@ -648,8 +677,49 @@ class TestZowietekClientStopStreamplay:
 
         await client.async_stop_streamplay()
 
-        call_args = mock_session.post.call_args
-        json_data = call_args[1]["json"]
+        # Should have made 2 calls: get info, then stop
+        assert mock_session.post.call_count == 2
+
+        # Verify the stop call used the correct index
+        stop_call_args = mock_session.post.call_args_list[1]
+        json_data = stop_call_args[1]["json"]
         assert json_data["group"] == "streamplay"
-        assert json_data["opt"] == "streamplay_stop"
-        assert json_data["user"] == "admin"
+        assert json_data["opt"] == "streamplay_switch"
+        assert json_data["data"]["index"] == 1  # The active source index
+        assert json_data["data"]["switch"] == 0  # Disable it
+
+    @pytest.mark.asyncio
+    async def test_async_stop_streamplay_no_active_source(self) -> None:
+        """Test stopping streamplay when no source is active does nothing."""
+        get_response = _create_mock_response(
+            {
+                "status": STATUS_SUCCESS,
+                "rsp": "succeed",
+                "data": [
+                    {"index": 0, "switch": 0, "name": "Source 1"},
+                    {"index": 1, "switch": 0, "name": "Source 2"},
+                ],
+            }
+        )
+
+        mock_session = MagicMock(spec=aiohttp.ClientSession)
+        mock_session.closed = False
+        mock_session.close = AsyncMock()
+
+        get_cm = MagicMock()
+        get_cm.__aenter__ = AsyncMock(return_value=get_response)
+        get_cm.__aexit__ = AsyncMock(return_value=None)
+
+        mock_session.post = MagicMock(return_value=get_cm)
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
+
+        await client.async_stop_streamplay()
+
+        # Should only have made 1 call (get info), no stop call needed
+        assert mock_session.post.call_count == 1

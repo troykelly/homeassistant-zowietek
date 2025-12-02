@@ -181,6 +181,9 @@ class ZowietekConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> dict[str, Any]:
         """Get device information for config entry.
 
+        Uses async_get_sys_attr_info which returns device identification data
+        including serial number, device name, and firmware version.
+
         Args:
             client: The ZowietekClient instance.
 
@@ -194,16 +197,17 @@ class ZowietekConfigFlow(ConfigFlow, domain=DOMAIN):
             "normalized_host": client.host,
         }
 
-        # Try to get device info from API (not all firmware versions support this)
+        # Try to get sys attr info from API (#49: use sys_attr instead of devinfo)
         try:
-            data = await client.async_get_device_info()
-            result["devicesn"] = data.get("devicesn", "")
-            result["devicename"] = data.get("devicename", "")
-            result["softver"] = data.get("softver", "")
+            data = await client.async_get_sys_attr_info()
+            # Map sys_attr fields to expected result fields
+            result["devicesn"] = data.get("SN", "")
+            result["devicename"] = data.get("device_name", "")
+            result["softver"] = data.get("firmware_version", "")
         except ZowietekError:
-            # Device info endpoint not supported - use host-based identification
+            # Sys attr endpoint not available - use host-based identification
             _LOGGER.debug(
-                "Device info API not available for %s, using host-based identification",
+                "Sys attr API not available for %s, using host-based identification",
                 client.host,
             )
 

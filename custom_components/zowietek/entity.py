@@ -50,20 +50,17 @@ class ZowietekEntity(CoordinatorEntity[ZowietekCoordinator]):
             DeviceInfo containing manufacturer, model, name, firmware version,
             serial number, and a link to the device's web UI.
         """
-        # Get firmware version from system data
-        sw_version = self.coordinator.data.system.get("firmware_version")
-        if sw_version is not None:
-            sw_version = str(sw_version)
+        # Get firmware version from system data (treat empty string as None)
+        sw_version_raw = self.coordinator.data.system.get("firmware_version")
+        sw_version = str(sw_version_raw) if sw_version_raw else None
 
-        # Get serial number from system data
-        serial_number = self.coordinator.data.system.get("devicesn")
-        if serial_number is not None:
-            serial_number = str(serial_number)
+        # Get serial number from system data (treat empty string as None)
+        serial_number_raw = self.coordinator.data.system.get("devicesn")
+        serial_number = str(serial_number_raw) if serial_number_raw else None
 
-        # Get hardware version for hw_version field
-        hw_version = self.coordinator.data.system.get("hardware_version")
-        if hw_version is not None:
-            hw_version = str(hw_version)
+        # Get hardware version for hw_version field (treat empty string as None)
+        hw_version_raw = self.coordinator.data.system.get("hardware_version")
+        hw_version = str(hw_version_raw) if hw_version_raw else None
 
         return DeviceInfo(
             identifiers={(DOMAIN, str(self.coordinator.config_entry.unique_id))},

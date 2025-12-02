@@ -200,7 +200,6 @@ def mock_zowietek_client(
         "custom_components.zowietek.coordinator.ZowietekClient", autospec=True
     ) as mock_client_class:
         client = mock_client_class.return_value
-        client.async_get_device_info = AsyncMock(return_value=mock_device_info)
         client.async_get_video_info = AsyncMock(return_value=mock_video_info)
         client.async_get_input_signal = AsyncMock(return_value=mock_input_signal)
         client.async_get_output_info = AsyncMock(return_value=mock_output_info)
@@ -261,8 +260,8 @@ class TestZowietekCoordinatorUpdate:
         await _refresh_coordinator(coordinator)
 
         # Verify all API methods were called
-        # Note: async_get_device_info is no longer used (endpoint unavailable)
-        # System data comes from NDI config's machinename instead
+        # Note: System data comes from async_get_sys_attr_info
+        # Falls back to NDI config's machinename if sys_attr unavailable
         mock_zowietek_client.async_get_input_signal.assert_called_once()
         mock_zowietek_client.async_get_output_info.assert_called_once()
         mock_zowietek_client.async_get_venc_info.assert_called_once()
@@ -371,14 +370,14 @@ class TestZowietekCoordinatorErrors:
     ) -> None:
         """Test optional endpoint failures are handled gracefully.
 
-        Device info and NDI config are optional endpoints that may not be
+        Sys attr and NDI config are optional endpoints that may not be
         supported on all firmware versions. Failures should not cause
         the coordinator to fail.
         """
         mock_config_entry.add_to_hass(hass)
 
         # Both optional endpoints fail
-        mock_zowietek_client.async_get_device_info.side_effect = ZowietekApiError(
+        mock_zowietek_client.async_get_sys_attr_info.side_effect = ZowietekApiError(
             "param group not support"
         )
         mock_zowietek_client.async_get_ndi_config.side_effect = ZowietekApiError(
@@ -403,7 +402,7 @@ class TestZowietekCoordinatorErrors:
         mock_config_entry.add_to_hass(hass)
 
         # Optional endpoint returns non-dict (e.g., None or list)
-        mock_zowietek_client.async_get_device_info.return_value = None
+        mock_zowietek_client.async_get_sys_attr_info.return_value = None
         mock_zowietek_client.async_get_ndi_config.return_value = ["not", "a", "dict"]
 
         coordinator = ZowietekCoordinator(hass, mock_config_entry)
@@ -534,7 +533,6 @@ class TestZowietekCoordinatorParallelFetch:
             await asyncio.sleep(0.01)  # Small delay to detect sequential vs parallel
             return {"status": "00000", "rsp": "succeed"}
 
-        mock_zowietek_client.async_get_device_info.side_effect = record_call
         mock_zowietek_client.async_get_video_info.side_effect = record_call
         mock_zowietek_client.async_get_input_signal.side_effect = record_call
         mock_zowietek_client.async_get_output_info.side_effect = record_call

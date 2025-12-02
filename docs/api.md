@@ -881,3 +881,39 @@ A typical control flow for a custom app might look like:
 6. Enable NDI if needed via `ndi` group
 7. Manage recording and snapshots via `/storage` / snapshot APIs
 8. Persist user accounts, time, and network settings via `/system`, `/lan`, `/wifi`, `/ap`, `/port`, `/mdns`
+
+---
+
+## 29. System Attributes – /system, group: "sys_attr"
+
+The `sys_attr` group provides comprehensive device identification information.
+
+### 29.1 Get system attributes
+
+- **Endpoint:** `POST /system?option=getinfo&login_check_flag=1`
+- **Body:**
+
+```json
+{ "group": "sys_attr" }
+```
+
+- **Response data:**
+  - `SN` – Device serial number
+  - `device_name` – Device name (e.g., "ZowieBox-27117")
+  - `firmware_version` – Firmware version (e.g., "2.0.0.12")
+  - `hardware_version` – Hardware version (e.g., "3.1.12.22")
+  - `manufacturer` – Manufacturer name ("Zowietek")
+  - `model` – Device model ("ZowieBox")
+  - `language_id` – Current language setting
+  - `isp_version` – ISP version
+  - `mcu_version` – MCU version
+  - `web_version` – Web interface version
+  - `ndi_version` – NDI library version
+  - `app_version` – Application version
+  - `ndi_activate` – NDI activation status
+  - `ndi_switch` – NDI enabled status
+  - `chipid` – Hardware chip ID
+  - `first_use_flag` – First use indicator
+  - `ui_first_use_flag` – UI first use indicator
+
+**Note:** This is the preferred endpoint for device identification. The `devinfo` group is NOT supported by ZowieBox devices and will return "Invalid parameters: param group not support !!!"

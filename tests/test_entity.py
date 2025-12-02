@@ -165,7 +165,6 @@ def mock_zowietek_client(
         "custom_components.zowietek.coordinator.ZowietekClient", autospec=True
     ) as mock_client_class:
         client = mock_client_class.return_value
-        client.async_get_device_info = AsyncMock(return_value=mock_device_info)
         client.async_get_video_info = AsyncMock(return_value=mock_video_info)
         client.async_get_input_signal = AsyncMock(return_value=mock_input_signal)
         client.async_get_output_info = AsyncMock(return_value=mock_output_info)
@@ -346,12 +345,11 @@ class TestZowietekEntityDeviceInfo:
         mock_config_entry.add_to_hass(hass)
 
         # Device info without model field
-        mock_zowietek_client.async_get_device_info.return_value = {
-            "status": "00000",
-            "rsp": "succeed",
-            "devicesn": "zowiebox-test-12345",
-            "devicename": "ZowieBox-Test",
-            "softver": "1.0.0",
+        # sys_attr response without model field - should fall back to "ZowieBox"
+        mock_zowietek_client.async_get_sys_attr_info.return_value = {
+            "SN": "zowiebox-test-12345",
+            "device_name": "ZowieBox-Test",
+            "firmware_version": "1.0.0",
         }
 
         coordinator = ZowietekCoordinator(hass, mock_config_entry)
@@ -438,11 +436,10 @@ class TestZowietekEntityDeviceInfo:
         mock_config_entry.add_to_hass(hass)
 
         # Device info without softver
-        mock_zowietek_client.async_get_device_info.return_value = {
-            "status": "00000",
-            "rsp": "succeed",
-            "devicesn": "zowiebox-test-12345",
-            "devicename": "ZowieBox-Test",
+        # sys_attr response without firmware_version - sw_version should be None
+        mock_zowietek_client.async_get_sys_attr_info.return_value = {
+            "SN": "zowiebox-test-12345",
+            "device_name": "ZowieBox-Test",
         }
 
         coordinator = ZowietekCoordinator(hass, mock_config_entry)

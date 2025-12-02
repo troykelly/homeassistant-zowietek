@@ -638,6 +638,8 @@ class TestZowietekClientWriteOperations:
         mock_session.post.assert_called_once()
         call_args = mock_session.post.call_args
         json_data = call_args[1]["json"]
+        assert json_data["group"] == "ndi"
+        assert json_data["opt"] == "ndi_switch"
         assert json_data["data"]["switch"] == 1
 
     @pytest.mark.asyncio
@@ -663,6 +665,8 @@ class TestZowietekClientWriteOperations:
         mock_session.post.assert_called_once()
         call_args = mock_session.post.call_args
         json_data = call_args[1]["json"]
+        assert json_data["group"] == "ndi"
+        assert json_data["opt"] == "ndi_switch"
         assert json_data["data"]["switch"] == 0
 
     @pytest.mark.asyncio

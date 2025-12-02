@@ -476,8 +476,8 @@ class ZowietekClient:
     async def async_set_ndi_enabled(self, enabled: bool) -> None:
         """Enable or disable NDI streaming.
 
-        NDI configuration is under the /video endpoint with group "ndi"
-        per the ZowieBox API documentation.
+        Uses the simple ndi_switch operation (API docs section 10.4) which
+        only toggles the NDI state without requiring the full configuration.
 
         Args:
             enabled: True to enable NDI, False to disable.
@@ -489,7 +489,7 @@ class ZowietekClient:
             "/video?option=setinfo",
             {
                 "group": "ndi",
-                "opt": "set_ndi_info",
+                "opt": "ndi_switch",
                 "data": {"switch": 1 if enabled else 0},
             },
             requires_auth=True,

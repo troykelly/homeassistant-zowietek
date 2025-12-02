@@ -357,6 +357,14 @@ class TestZowietekData:
             "cpu_usage": 32.1,
         }
 
+        streamplay: dict[str, str | int | list[dict[str, str | int]]] = {
+            "sources": [],
+        }
+        decoder_status: dict[str, str | int] = {
+            "state": 0,
+        }
+        ndi_sources: list[dict[str, str | int]] = []
+
         data = ZowietekData(
             system=system,
             video=video,
@@ -364,6 +372,9 @@ class TestZowietekData:
             stream=stream,
             network=network,
             dashboard=dashboard,
+            streamplay=streamplay,
+            decoder_status=decoder_status,
+            ndi_sources=ndi_sources,
         )
 
         assert data.system["device_name"] == "ZowieBox-Test"
@@ -372,6 +383,9 @@ class TestZowietekData:
         assert data.stream["ndi_enabled"] is True
         assert data.network["ip_address"] == "192.168.1.100"
         assert data.dashboard["uptime"] == "01:23:45"
+        assert data.streamplay["sources"] == []
+        assert data.decoder_status["state"] == 0
+        assert data.ndi_sources == []
 
     def test_zowietek_data_fields_have_correct_types(self) -> None:
         """Test that ZowietekData fields have the correct type annotations.

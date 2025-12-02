@@ -761,6 +761,239 @@ class ZowietekClient:
             requires_auth=True,
         )
 
+    # =========================================================================
+    # Streamplay/Decoder Methods (for decoder mode playback control)
+    # =========================================================================
+
+    async def async_get_streamplay_info(self) -> dict[str, Any]:
+        """Get streamplay/decoder configuration and status.
+
+        Returns a list of configured playback sources for decoder mode.
+
+        Returns:
+            Dictionary containing 'streamplay' list with configured sources.
+            Each source has: index, switch, name, streamtype, url, and status info.
+        """
+        data = await self._request(
+            "/streamplay?option=getinfo",
+            {"group": "streamplay", "opt": "streamplay_get_all"},
+        )
+        # The API returns sources in 'data' key as a list, not under 'streamplay'
+        # Build a consistent response format
+        data_value = data.get("data")
+        if isinstance(data_value, list):
+            # Sources are directly in 'data' array
+            return {"streamplay": data_value}
+        if isinstance(data_value, dict):
+            # 'data' is a dict, look for 'streamplay' inside it
+            streamplay = data_value.get("streamplay", [])
+            return {"streamplay": streamplay if isinstance(streamplay, list) else []}
+        # Fallback: check if 'streamplay' exists at top level
+        streamplay = data.get("streamplay", [])
+        return {"streamplay": streamplay if isinstance(streamplay, list) else []}
+
+    async def async_get_decoder_status(self) -> dict[str, Any]:
+        """Get current decoder state.
+
+        Returns information about the decoder's current playback state,
+        including whether it's playing and what source is active.
+
+        Returns:
+            Dictionary containing decoder_state and active source info.
+        """
+        data = await self._request(
+            "/streamplay?option=getinfo",
+            {"group": "streamplay", "opt": "get_decoder_state"},
+        )
+        return self._extract_data(data, "data")
+
+    async def async_add_decoding_url(
+        self,
+        name: str,
+        url: str,
+        streamtype: int = 1,
+        switch: bool = True,
+    ) -> None:
+        """Add a new playback source for decoder mode.
+
+        Args:
+            name: Display name for the source.
+            url: Stream URL (rtsp://, srt://, rtmp://, http://, etc.).
+            streamtype: Stream type (0=local, 1=live). Defaults to 1 (live).
+            switch: Whether to enable the source immediately. Defaults to True.
+
+        Raises:
+            ZowietekAuthError: If authentication fails.
+            ZowietekApiError: If the operation fails.
+        """
+        await self._request(
+            "/streamplay?option=setinfo",
+            {
+                "group": "streamplay",
+                "opt": "streamplay_add",
+                "name": name,
+                "url": url,
+                "streamtype": streamtype,
+                "switch": 1 if switch else 0,
+            },
+            requires_auth=True,
+        )
+
+    async def async_modify_decoding_url(
+        self,
+        index: int,
+        name: str,
+        url: str,
+        streamtype: int = 1,
+        switch: bool = True,
+    ) -> None:
+        """Modify an existing playback source.
+
+        Args:
+            index: Index of the source to modify.
+            name: New display name for the source.
+            url: New stream URL.
+            streamtype: Stream type (0=local, 1=live). Defaults to 1 (live).
+            switch: Whether the source should be enabled. Defaults to True.
+
+        Raises:
+            ZowietekAuthError: If authentication fails.
+            ZowietekApiError: If the operation fails.
+        """
+        await self._request(
+            "/streamplay?option=setinfo",
+            {
+                "group": "streamplay",
+                "opt": "streamplay_modify",
+                "index": index,
+                "name": name,
+                "url": url,
+                "streamtype": streamtype,
+                "switch": 1 if switch else 0,
+            },
+            requires_auth=True,
+        )
+
+    async def async_delete_decoding_url(self, index: int) -> None:
+        """Delete a playback source.
+
+        Args:
+            index: Index of the source to delete.
+
+        Raises:
+            ZowietekAuthError: If authentication fails.
+            ZowietekApiError: If the operation fails.
+        """
+        await self._request(
+            "/streamplay?option=setinfo",
+            {
+                "group": "streamplay",
+                "opt": "streamplay_del",
+                "index": index,
+            },
+            requires_auth=True,
+        )
+
+    async def async_select_streamplay_source(self, index: int) -> None:
+        """Select and activate a streamplay source by index.
+
+        Args:
+            index: Index of the source to activate.
+
+        Raises:
+            ZowietekAuthError: If authentication fails.
+            ZowietekApiError: If the operation fails.
+        """
+        await self._request(
+            "/streamplay?option=setinfo",
+            {
+                "group": "streamplay",
+                "opt": "streamplay_select",
+                "index": index,
+            },
+            requires_auth=True,
+        )
+
+    async def async_stop_streamplay(self) -> None:
+        """Stop current streamplay/decoder playback.
+
+        Raises:
+            ZowietekAuthError: If authentication fails.
+            ZowietekApiError: If the operation fails.
+        """
+        await self._request(
+            "/streamplay?option=setinfo",
+            {
+                "group": "streamplay",
+                "opt": "streamplay_stop",
+            },
+            requires_auth=True,
+        )
+
+    async def async_enable_ndi_decoding(self, ndi_name: str) -> None:
+        """Enable NDI source for decoder playback.
+
+        Args:
+            ndi_name: The NDI source name (e.g., "CAMERA1 (Channel 1)").
+
+        Raises:
+            ZowietekAuthError: If authentication fails.
+            ZowietekApiError: If the operation fails.
+        """
+        await self._request(
+            "/streamplay?option=setinfo",
+            {
+                "group": "streamplay",
+                "opt": "ndi_enable",
+                "ndi_name": ndi_name,
+            },
+            requires_auth=True,
+        )
+
+    async def async_disable_ndi_decoding(self) -> None:
+        """Disable NDI decoder playback.
+
+        Raises:
+            ZowietekAuthError: If authentication fails.
+            ZowietekApiError: If the operation fails.
+        """
+        await self._request(
+            "/streamplay?option=setinfo",
+            {
+                "group": "streamplay",
+                "opt": "ndi_close",
+            },
+            requires_auth=True,
+        )
+
+    async def async_get_ndi_sources(self) -> dict[str, Any]:
+        """Get list of discovered NDI sources.
+
+        Returns:
+            Dictionary containing 'ndi_sources' list with available sources.
+            Each source has: index, name, url.
+        """
+        data = await self._request(
+            "/streamplay?option=getinfo",
+            {"group": "streamplay", "opt": "ndi_get_sources"},
+        )
+        result = self._extract_data(data, "data")
+        # Ensure ndi_sources key exists
+        if "ndi_sources" not in result:
+            result["ndi_sources"] = []
+        return result
+
+    async def async_ndi_find(self) -> None:
+        """Trigger NDI source discovery.
+
+        Initiates a scan for NDI sources on the network. After calling this,
+        use async_get_ndi_sources() to retrieve the discovered sources.
+        """
+        await self._request(
+            "/streamplay?option=setinfo",
+            {"group": "streamplay", "opt": "ndi_find"},
+        )
+
     async def close(self) -> None:
         """Close the client session.
 

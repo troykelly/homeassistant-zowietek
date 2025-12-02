@@ -322,6 +322,9 @@ class ZowietekCoordinator(DataUpdateCoordinator[ZowietekData]):
                 audio_info,
                 sys_attr,
                 dashboard_info,
+                streamplay_info,
+                decoder_status,
+                ndi_sources,
             ) = await asyncio.gather(
                 self.client.async_get_input_signal(),
                 self.client.async_get_output_info(),
@@ -342,6 +345,18 @@ class ZowietekCoordinator(DataUpdateCoordinator[ZowietekData]):
                 self._async_fetch_optional(
                     "dashboard_info",
                     self.client.async_get_dashboard_info(),
+                ),
+                self._async_fetch_optional(
+                    "streamplay_info",
+                    self.client.async_get_streamplay_info(),
+                ),
+                self._async_fetch_optional(
+                    "decoder_status",
+                    self.client.async_get_decoder_status(),
+                ),
+                self._async_fetch_optional(
+                    "ndi_sources",
+                    self.client.async_get_ndi_sources(),
                 ),
             )
 
@@ -479,6 +494,35 @@ class ZowietekCoordinator(DataUpdateCoordinator[ZowietekData]):
                     dashboard_data["memory_used"] = memory.get("used", 0)
                     dashboard_data["memory_total"] = memory.get("total", 0)
 
+            # Build streamplay data for media player
+            streamplay_data: dict[str, str | int | list[dict[str, str | int]]] = {}
+            if streamplay_info:
+                streamplay_list = streamplay_info.get("streamplay", [])
+                if isinstance(streamplay_list, list):
+                    streamplay_data["sources"] = streamplay_list
+                else:
+                    streamplay_data["sources"] = []
+            else:
+                streamplay_data["sources"] = []
+
+            # Build decoder status data
+            decoder_status_data: dict[str, str | int] = {}
+            if decoder_status:
+                decoder_status_data["state"] = decoder_status.get("decoder_state", 0)
+                decoder_status_data["active_source"] = decoder_status.get("active_source", "")
+                decoder_status_data["active_index"] = decoder_status.get("active_index", -1)
+                decoder_status_data["width"] = decoder_status.get("width", 0)
+                decoder_status_data["height"] = decoder_status.get("height", 0)
+                decoder_status_data["framerate"] = decoder_status.get("framerate", 0)
+                decoder_status_data["bandwidth"] = decoder_status.get("bandwidth", 0)
+
+            # Build NDI sources list for media player source selection
+            ndi_sources_list: list[dict[str, str | int]] = []
+            if ndi_sources:
+                sources = ndi_sources.get("ndi_sources", [])
+                if isinstance(sources, list):
+                    ndi_sources_list = sources
+
             result = ZowietekData(
                 system=system_data,
                 video=video_data,
@@ -486,6 +530,9 @@ class ZowietekCoordinator(DataUpdateCoordinator[ZowietekData]):
                 stream=stream_data,
                 network={},  # Network info not yet implemented in API
                 dashboard=dashboard_data,
+                streamplay=streamplay_data,
+                decoder_status=decoder_status_data,
+                ndi_sources=ndi_sources_list,
             )
 
             # Check for state changes and fire device trigger events

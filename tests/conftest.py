@@ -233,6 +233,57 @@ def add_coordinator_mocks(client: MagicMock) -> None:
     client.async_set_audio_volume = AsyncMock()
     client.async_set_encoder_bitrate = AsyncMock()
 
+    # Streamplay/decoder methods
+    client.async_get_streamplay_info = AsyncMock(
+        return_value={
+            "streamplay": [
+                {
+                    "index": 0,
+                    "switch": 1,
+                    "name": "Test Stream",
+                    "streamtype": 1,
+                    "url": "rtsp://test.stream/live",
+                    "streamplay_status": 1,
+                    "bandwidth": 5000,
+                    "framerate": 30,
+                    "width": 1920,
+                    "height": 1080,
+                },
+            ],
+        }
+    )
+
+    client.async_get_decoder_status = AsyncMock(
+        return_value={
+            "decoder_state": 1,
+            "active_source": "Test Stream",
+            "active_index": 0,
+            "width": 1920,
+            "height": 1080,
+            "framerate": 30,
+            "bandwidth": 5000,
+        }
+    )
+
+    client.async_get_ndi_sources = AsyncMock(
+        return_value={
+            "ndi_sources": [
+                {"index": 0, "name": "NDI Source 1", "url": "ndi://source1"},
+                {"index": 1, "name": "NDI Source 2", "url": "ndi://source2"},
+            ],
+        }
+    )
+
+    # Streamplay control methods
+    client.async_add_decoding_url = AsyncMock()
+    client.async_modify_decoding_url = AsyncMock()
+    client.async_delete_decoding_url = AsyncMock()
+    client.async_select_streamplay_source = AsyncMock()
+    client.async_stop_streamplay = AsyncMock()
+    client.async_enable_ndi_decoding = AsyncMock()
+    client.async_disable_ndi_decoding = AsyncMock()
+    client.async_ndi_find = AsyncMock()
+
 
 def setup_mock_zowietek_client(
     client: MagicMock,
@@ -362,6 +413,35 @@ def create_mock_coordinator(
             ],
         },
         network={},
+        streamplay={
+            "sources": [
+                {
+                    "index": 0,
+                    "switch": 1,
+                    "name": "Test Stream",
+                    "streamtype": 1,
+                    "url": "rtsp://test.stream/live",
+                    "streamplay_status": 1,
+                    "bandwidth": 5000,
+                    "framerate": 30,
+                    "width": 1920,
+                    "height": 1080,
+                },
+            ],
+        },
+        decoder_status={
+            "state": 1,
+            "active_source": "Test Stream",
+            "active_index": 0,
+            "width": 1920,
+            "height": 1080,
+            "framerate": 30,
+            "bandwidth": 5000,
+        },
+        ndi_sources=[
+            {"index": 0, "name": "NDI Source 1", "url": "ndi://source1"},
+            {"index": 1, "name": "NDI Source 2", "url": "ndi://source2"},
+        ],
     )
     coordinator.last_update_success = True
     return coordinator

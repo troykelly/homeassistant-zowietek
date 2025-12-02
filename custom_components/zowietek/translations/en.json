@@ -187,6 +187,11 @@
       "stream_bitrate": {
         "name": "Stream bitrate"
       }
+    },
+    "media_player": {
+      "decoder": {
+        "name": "Decoder"
+      }
     }
   }
 }

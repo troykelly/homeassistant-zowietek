@@ -14,7 +14,7 @@ from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import ZowietekClient
-from .const import DEFAULT_SCAN_INTERVAL, DOMAIN
+from .const import CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL, DOMAIN
 from .exceptions import (
     ZowietekAuthError,
     ZowietekConnectionError,
@@ -55,11 +55,14 @@ class ZowietekCoordinator(DataUpdateCoordinator[ZowietekData]):
             hass: The Home Assistant instance.
             entry: The config entry for this integration instance.
         """
+        # Get scan interval from options, falling back to default
+        scan_interval = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+
         super().__init__(
             hass,
             _LOGGER,
             name=DOMAIN,
-            update_interval=timedelta(seconds=DEFAULT_SCAN_INTERVAL),
+            update_interval=timedelta(seconds=scan_interval),
         )
         self.config_entry = entry
         self.client = ZowietekClient(

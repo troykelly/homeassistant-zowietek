@@ -6,11 +6,25 @@ import logging
 from typing import TYPE_CHECKING
 
 import voluptuous as vol
-from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlow,
+)
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
+from homeassistant.core import callback
 
 from .api import ZowietekClient
-from .const import DEFAULT_PASSWORD, DEFAULT_USERNAME, DOMAIN
+from .const import (
+    CONF_SCAN_INTERVAL,
+    DEFAULT_PASSWORD,
+    DEFAULT_SCAN_INTERVAL,
+    DEFAULT_USERNAME,
+    DOMAIN,
+    MAX_SCAN_INTERVAL,
+    MIN_SCAN_INTERVAL,
+)
 from .exceptions import (
     ZowietekAuthError,
     ZowietekConnectionError,
@@ -47,6 +61,21 @@ class ZowietekConfigFlow(ConfigFlow, domain=DOMAIN):
     def __init__(self) -> None:
         """Initialize the config flow."""
         self._reauth_entry: ConfigEntry[Any] | None = None
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(
+        config_entry: ConfigEntry[Any],
+    ) -> ZowietekOptionsFlow:
+        """Get the options flow for this handler.
+
+        Args:
+            config_entry: The config entry to configure.
+
+        Returns:
+            The options flow handler.
+        """
+        return ZowietekOptionsFlow(config_entry)
 
     async def async_step_user(
         self,
@@ -306,3 +335,54 @@ class ZowietekConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors["base"] = "unknown"
 
         return False
+
+
+class ZowietekOptionsFlow(OptionsFlow):
+    """Handle Zowietek options flow.
+
+    This flow allows users to configure options like polling interval
+    after the integration has been set up.
+    """
+
+    def __init__(self, config_entry: ConfigEntry[Any]) -> None:
+        """Initialize the options flow.
+
+        Args:
+            config_entry: The config entry being configured.
+        """
+        self._config_entry = config_entry
+
+    async def async_step_init(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> ConfigFlowResult:
+        """Manage the options.
+
+        Args:
+            user_input: User input from the form, or None on first call.
+
+        Returns:
+            ConfigFlowResult with form or create entry.
+        """
+        if user_input is not None:
+            return self.async_create_entry(title="", data=user_input)
+
+        # Get current value or default
+        current_scan_interval = self._config_entry.options.get(
+            CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
+        )
+
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_SCAN_INTERVAL,
+                        default=current_scan_interval,
+                    ): vol.All(
+                        vol.Coerce(int),
+                        vol.Range(min=MIN_SCAN_INTERVAL, max=MAX_SCAN_INTERVAL),
+                    ),
+                }
+            ),
+        )

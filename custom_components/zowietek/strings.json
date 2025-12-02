@@ -107,6 +107,14 @@
       "output_format": {
         "name": "Output format"
       }
+    },
+    "number": {
+      "audio_volume": {
+        "name": "Audio volume"
+      },
+      "stream_bitrate": {
+        "name": "Stream bitrate"
+      }
     }
   }
 }

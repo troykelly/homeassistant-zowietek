@@ -21,6 +21,7 @@ PLATFORMS: list[Platform] = [
     Platform.SWITCH,
     Platform.BUTTON,
     Platform.SELECT,
+    Platform.NUMBER,
 ]
 
 type ZowietekConfigEntry = ConfigEntry[ZowietekCoordinator]

@@ -63,6 +63,13 @@ def mock_coordinator_data() -> ZowietekData:
             "cpu_temp": 45.5,
             "cpu_payload": 25.0,
         },
+        streamplay={
+            "sources": [],
+        },
+        decoder_status={
+            "state": 0,
+        },
+        ndi_sources=[],
     )
 
 

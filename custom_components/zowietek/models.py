@@ -203,6 +203,68 @@ class ZowietekDashboard(TypedDict):
     cpu_payload: NotRequired[float]
 
 
+class ZowietekStreamplayEntry(TypedDict):
+    """Single streamplay/decoder source entry.
+
+    Represents a configured playback source in decoder mode.
+    """
+
+    index: NotRequired[int]
+    switch: NotRequired[int]
+    name: NotRequired[str]
+    streamtype: NotRequired[int]
+    url: NotRequired[str]
+    streamplay_status: NotRequired[int]
+    bandwidth: NotRequired[int]
+    framerate: NotRequired[int]
+    width: NotRequired[int]
+    height: NotRequired[int]
+
+
+class ZowietekStreamplayInfo(TypedDict):
+    """Streamplay information from async_get_streamplay_info API.
+
+    Contains list of configured decoder playback sources.
+    """
+
+    streamplay: list[ZowietekStreamplayEntry]
+
+
+class ZowietekDecoderStatus(TypedDict):
+    """Decoder status from async_get_decoder_status API.
+
+    Contains current decoder state and active source information.
+    """
+
+    decoder_state: NotRequired[int]
+    active_source: NotRequired[str]
+    active_index: NotRequired[int]
+    width: NotRequired[int]
+    height: NotRequired[int]
+    framerate: NotRequired[int]
+    bandwidth: NotRequired[int]
+
+
+class ZowietekNdiSourceEntry(TypedDict):
+    """Single NDI source entry.
+
+    Represents a discovered NDI source on the network.
+    """
+
+    index: NotRequired[int]
+    name: NotRequired[str]
+    url: NotRequired[str]
+
+
+class ZowietekNdiSources(TypedDict):
+    """NDI sources from async_get_ndi_sources API.
+
+    Contains list of discovered NDI sources.
+    """
+
+    ndi_sources: list[ZowietekNdiSourceEntry]
+
+
 @dataclass
 class ZowietekData:
     """Container for all ZowieBox device data.
@@ -218,3 +280,6 @@ class ZowietekData:
     stream: dict[str, str | int | list[dict[str, str | int]]]
     network: dict[str, str | int]
     dashboard: dict[str, str | int | float]
+    streamplay: dict[str, str | int | list[dict[str, str | int]]]
+    decoder_status: dict[str, str | int]
+    ndi_sources: list[dict[str, str | int]]

@@ -24,6 +24,7 @@ PLATFORMS: list[Platform] = [
     Platform.BUTTON,
     Platform.SELECT,
     Platform.NUMBER,
+    Platform.MEDIA_PLAYER,
 ]
 
 type ZowietekConfigEntry = ConfigEntry[ZowietekCoordinator]

@@ -3,6 +3,16 @@
     "step": {
       "user": {
         "title": "Add ZowieBox Device",
+        "description": "Select a discovered device or choose to enter the address manually.",
+        "data": {
+          "device": "Device"
+        },
+        "data_description": {
+          "device": "Select a ZowieBox device from the list"
+        }
+      },
+      "manual": {
+        "title": "Add ZowieBox Device",
         "description": "Enter the connection details for your ZowieBox device.",
         "data": {
           "host": "Host",
@@ -11,6 +21,18 @@
         },
         "data_description": {
           "host": "Hostname, IP address, or URL of the ZowieBox device",
+          "username": "Device username (default: admin)",
+          "password": "Device password (default: admin)"
+        }
+      },
+      "credentials": {
+        "title": "Enter Credentials",
+        "description": "Enter credentials for {device_name} at {device_ip}.",
+        "data": {
+          "username": "Username",
+          "password": "Password"
+        },
+        "data_description": {
           "username": "Device username (default: admin)",
           "password": "Device password (default: admin)"
         }

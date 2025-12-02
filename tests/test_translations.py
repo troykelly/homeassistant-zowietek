@@ -115,7 +115,7 @@ class TestConfigFlowStrings:
         assert isinstance(user["description"], str), "description must be a string"
 
     def test_config_step_user_has_data_fields(self, strings_data: dict[str, object]) -> None:
-        """Test that config.step.user has required data fields."""
+        """Test that config.step.user has device picker field."""
         config = strings_data.get("config")
         assert isinstance(config, dict)
         step = config.get("step")
@@ -125,13 +125,12 @@ class TestConfigFlowStrings:
         data = user.get("data")
         assert isinstance(data, dict), "config.step.user.data must exist"
 
-        required_fields = ["host", "username", "password"]
-        for field in required_fields:
-            assert field in data, f"config.step.user.data must have {field}"
-            assert isinstance(data[field], str), f"{field} must be a string"
+        # User step shows device picker
+        assert "device" in data, "config.step.user.data must have device"
+        assert isinstance(data["device"], str), "device must be a string"
 
     def test_config_step_user_has_data_descriptions(self, strings_data: dict[str, object]) -> None:
-        """Test that config.step.user has data_description for host."""
+        """Test that config.step.user has data_description for device."""
         config = strings_data.get("config")
         assert isinstance(config, dict)
         step = config.get("step")
@@ -140,7 +139,52 @@ class TestConfigFlowStrings:
         assert isinstance(user, dict)
         data_desc = user.get("data_description")
         assert isinstance(data_desc, dict), "config.step.user.data_description must exist"
+        assert "device" in data_desc, "data_description must have device"
+
+    def test_config_step_manual_has_data_fields(self, strings_data: dict[str, object]) -> None:
+        """Test that config.step.manual has required data fields."""
+        config = strings_data.get("config")
+        assert isinstance(config, dict)
+        step = config.get("step")
+        assert isinstance(step, dict)
+        manual = step.get("manual")
+        assert isinstance(manual, dict), "config.step.manual must exist"
+        data = manual.get("data")
+        assert isinstance(data, dict), "config.step.manual.data must exist"
+
+        required_fields = ["host", "username", "password"]
+        for field in required_fields:
+            assert field in data, f"config.step.manual.data must have {field}"
+            assert isinstance(data[field], str), f"{field} must be a string"
+
+    def test_config_step_manual_has_data_descriptions(
+        self, strings_data: dict[str, object]
+    ) -> None:
+        """Test that config.step.manual has data_description for host."""
+        config = strings_data.get("config")
+        assert isinstance(config, dict)
+        step = config.get("step")
+        assert isinstance(step, dict)
+        manual = step.get("manual")
+        assert isinstance(manual, dict)
+        data_desc = manual.get("data_description")
+        assert isinstance(data_desc, dict), "config.step.manual.data_description must exist"
         assert "host" in data_desc, "data_description must have host"
+
+    def test_config_step_credentials_exists(self, strings_data: dict[str, object]) -> None:
+        """Test that config.step.credentials section exists for discovered devices."""
+        config = strings_data.get("config")
+        assert isinstance(config, dict)
+        step = config.get("step")
+        assert isinstance(step, dict)
+        credentials = step.get("credentials")
+        assert isinstance(credentials, dict), "config.step.credentials must exist"
+        assert "title" in credentials, "credentials must have title"
+        assert "description" in credentials, "credentials must have description"
+        data = credentials.get("data")
+        assert isinstance(data, dict), "credentials.data must exist"
+        assert "username" in data, "credentials.data must have username"
+        assert "password" in data, "credentials.data must have password"
 
     def test_config_errors_exist(self, strings_data: dict[str, object]) -> None:
         """Test that config.error section exists with required errors."""

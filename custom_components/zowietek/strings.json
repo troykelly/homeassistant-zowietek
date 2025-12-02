@@ -89,6 +89,14 @@
       }
     }
   },
+  "device_automation": {
+    "trigger_type": {
+      "stream_started": "Any stream output started",
+      "stream_stopped": "All stream outputs stopped",
+      "video_input_detected": "HDMI video input detected",
+      "video_input_lost": "HDMI video input lost"
+    }
+  },
   "entity": {
     "sensor": {
       "video_resolution": {

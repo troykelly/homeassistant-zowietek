@@ -8,13 +8,15 @@ from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
+from homeassistant.const import CONF_DEVICE_ID, CONF_HOST, CONF_PASSWORD, CONF_TYPE, CONF_USERNAME
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import ZowietekClient
 from .const import CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL, DOMAIN
+from .device_trigger import EVENT_TYPE
 from .exceptions import (
     ZowietekAuthError,
     ZowietekConnectionError,
@@ -71,6 +73,9 @@ class ZowietekCoordinator(DataUpdateCoordinator[ZowietekData]):
             password=entry.data[CONF_PASSWORD],
         )
         self._consecutive_failures: int = 0
+        # Track previous state for device trigger events
+        self._prev_streaming: bool | None = None
+        self._prev_video_input: bool | None = None
 
     @property
     def consecutive_failures(self) -> int:
@@ -109,6 +114,120 @@ class ZowietekCoordinator(DataUpdateCoordinator[ZowietekData]):
                 return str(device_name)
         # Fallback to config entry title
         return self.config_entry.title
+
+    def _get_ha_device_id(self) -> str | None:
+        """Get the Home Assistant device ID for this device.
+
+        Returns:
+            The HA device registry ID, or None if not found.
+        """
+        device_registry = dr.async_get(self.hass)
+        device = device_registry.async_get_device(
+            identifiers={(DOMAIN, str(self.config_entry.unique_id))}
+        )
+        return device.id if device else None
+
+    def _is_streaming(self, data: ZowietekData) -> bool:
+        """Check if any streaming output is enabled.
+
+        Args:
+            data: The device data to check.
+
+        Returns:
+            True if any stream (NDI, RTMP, or SRT) is enabled.
+        """
+        stream_data = data.stream
+
+        # Check NDI
+        ndi_switch = stream_data.get("ndi_switch")
+        if ndi_switch is not None and str(ndi_switch) == "1":
+            return True
+
+        # Check RTMP and SRT in publish list
+        publish_list = stream_data.get("publish")
+        if isinstance(publish_list, list):
+            for entry in publish_list:
+                if isinstance(entry, dict):
+                    switch = entry.get("switch")
+                    if switch is not None and str(switch) == "1":
+                        return True
+
+        return False
+
+    def _has_video_input(self, data: ZowietekData) -> bool:
+        """Check if video input signal is detected.
+
+        Args:
+            data: The device data to check.
+
+        Returns:
+            True if video input signal is detected.
+        """
+        video_data = data.video
+
+        # Try 'input_signal' first, then fall back to 'input_hdmi_signal'
+        signal = video_data.get("input_signal")
+        if signal is None:
+            signal = video_data.get("input_hdmi_signal")
+
+        if signal is None:
+            return False
+
+        return str(signal) == "1"
+
+    def _fire_trigger_event(self, trigger_type: str) -> None:
+        """Fire a device trigger event.
+
+        Args:
+            trigger_type: The trigger type to fire (e.g., 'stream_started').
+        """
+        device_id = self._get_ha_device_id()
+        if device_id is None:
+            _LOGGER.debug(
+                "Cannot fire trigger event %s: device not found in registry",
+                trigger_type,
+            )
+            return
+
+        _LOGGER.debug(
+            "Firing device trigger event: %s for device %s",
+            trigger_type,
+            device_id,
+        )
+        self.hass.bus.async_fire(
+            EVENT_TYPE,
+            {
+                CONF_DEVICE_ID: device_id,
+                CONF_TYPE: trigger_type,
+            },
+        )
+
+    def _check_and_fire_triggers(self, new_data: ZowietekData) -> None:
+        """Check for state changes and fire appropriate trigger events.
+
+        Args:
+            new_data: The newly fetched device data.
+        """
+        current_streaming = self._is_streaming(new_data)
+        current_video_input = self._has_video_input(new_data)
+
+        # Check streaming state change
+        if self._prev_streaming is not None:
+            if current_streaming and not self._prev_streaming:
+                self._fire_trigger_event("stream_started")
+            elif not current_streaming and self._prev_streaming:
+                self._fire_trigger_event("stream_stopped")
+
+        # Check video input state change
+        if self._prev_video_input is not None:
+            if current_video_input and not self._prev_video_input:
+                self._fire_trigger_event("video_input_detected")
+            elif not current_video_input and self._prev_video_input:
+                self._fire_trigger_event("video_input_lost")
+
+        # Update previous state
+        self._prev_streaming = current_streaming
+        self._prev_video_input = current_video_input
 
     async def _async_fetch_optional(
         self,
@@ -360,7 +479,7 @@ class ZowietekCoordinator(DataUpdateCoordinator[ZowietekData]):
                     dashboard_data["memory_used"] = memory.get("used", 0)
                     dashboard_data["memory_total"] = memory.get("total", 0)
 
-            return ZowietekData(
+            result = ZowietekData(
                 system=system_data,
                 video=video_data,
                 audio=audio_info if audio_info else {},
@@ -368,6 +487,11 @@ class ZowietekCoordinator(DataUpdateCoordinator[ZowietekData]):
                 network={},  # Network info not yet implemented in API
                 dashboard=dashboard_data,
             )
+
+            # Check for state changes and fire device trigger events
+            self._check_and_fire_triggers(result)
+
+            return result
 
         except ZowietekAuthError as err:
             # Authentication errors should trigger reauthentication flow

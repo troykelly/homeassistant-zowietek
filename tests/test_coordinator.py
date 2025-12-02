@@ -16,6 +16,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.zowietek.const import DOMAIN
 from custom_components.zowietek.coordinator import ZowietekCoordinator
+from custom_components.zowietek.device_trigger import EVENT_TYPE
 from custom_components.zowietek.exceptions import (
     ZowietekApiError,
     ZowietekAuthError,
@@ -1231,3 +1232,365 @@ class TestZowietekCoordinatorConnectionRecovery:
 
         # Should use 120 second interval
         assert coordinator.update_interval == timedelta(seconds=120)
+
+
+class TestZowietekCoordinatorDeviceTriggers:
+    """Tests for ZowietekCoordinator device trigger firing."""
+
+    async def test_stream_started_trigger_fires_on_state_change(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+        mock_input_signal: dict[str, str | int],
+        mock_output_info: dict[str, str | int],
+        mock_venc_info: dict[str, list[dict[str, str | int | dict[str, str | int | list[str]]]]],
+        mock_ndi_config: dict[str, str | int],
+        mock_audio_info: dict[str, str | int | dict[str, str | int | list[str]]],
+    ) -> None:
+        """Test stream_started trigger fires when streaming goes from off to on."""
+        mock_config_entry.add_to_hass(hass)
+
+        events: list[dict[str, str]] = []
+
+        async def record_event(event: object) -> None:
+            """Record fired events."""
+            if hasattr(event, "data"):
+                events.append(event.data)  # type: ignore[union-attr]
+
+        hass.bus.async_listen(EVENT_TYPE, record_event)
+
+        # First fetch: streaming is OFF (NDI off, no RTMP/SRT)
+        mock_zowietek_client.async_get_input_signal.return_value = mock_input_signal
+        mock_zowietek_client.async_get_output_info.return_value = mock_output_info
+        mock_zowietek_client.async_get_venc_info.return_value = mock_venc_info
+        mock_zowietek_client.async_get_stream_publish_info.return_value = {
+            "publish": [
+                {"type": "rtmp", "index": 0, "switch": 0, "url": ""},
+                {"type": "srt", "index": 1, "switch": 0, "url": ""},
+            ]
+        }
+        mock_zowietek_client.async_get_ndi_config.return_value = {
+            **mock_ndi_config,
+            "switch": 0,  # NDI off
+        }
+        mock_zowietek_client.async_get_audio_info.return_value = mock_audio_info
+
+        # Register device in registry
+        from homeassistant.helpers import device_registry as dr
+
+        device_registry = dr.async_get(hass)
+        device_registry.async_get_or_create(
+            config_entry_id=mock_config_entry.entry_id,
+            identifiers={(DOMAIN, str(mock_config_entry.unique_id))},
+        )
+
+        coordinator = ZowietekCoordinator(hass, mock_config_entry)
+        await _refresh_coordinator(coordinator)
+
+        # Clear events from first fetch (no event should fire on first fetch)
+        events.clear()
+
+        # Second fetch: streaming is ON (NDI enabled)
+        mock_zowietek_client.async_get_ndi_config.return_value = {
+            **mock_ndi_config,
+            "switch": 1,  # NDI on
+        }
+
+        await _refresh_coordinator(coordinator)
+        await hass.async_block_till_done()
+
+        # stream_started event should have fired
+        assert len(events) == 1
+        assert events[0]["type"] == "stream_started"
+
+    async def test_stream_stopped_trigger_fires_on_state_change(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+        mock_input_signal: dict[str, str | int],
+        mock_output_info: dict[str, str | int],
+        mock_venc_info: dict[str, list[dict[str, str | int | dict[str, str | int | list[str]]]]],
+        mock_ndi_config: dict[str, str | int],
+        mock_audio_info: dict[str, str | int | dict[str, str | int | list[str]]],
+    ) -> None:
+        """Test stream_stopped trigger fires when streaming goes from on to off."""
+        mock_config_entry.add_to_hass(hass)
+
+        events: list[dict[str, str]] = []
+
+        async def record_event(event: object) -> None:
+            """Record fired events."""
+            if hasattr(event, "data"):
+                events.append(event.data)  # type: ignore[union-attr]
+
+        hass.bus.async_listen(EVENT_TYPE, record_event)
+
+        # First fetch: streaming is ON (NDI enabled)
+        mock_zowietek_client.async_get_input_signal.return_value = mock_input_signal
+        mock_zowietek_client.async_get_output_info.return_value = mock_output_info
+        mock_zowietek_client.async_get_venc_info.return_value = mock_venc_info
+        mock_zowietek_client.async_get_stream_publish_info.return_value = {
+            "publish": [
+                {"type": "rtmp", "index": 0, "switch": 0, "url": ""},
+                {"type": "srt", "index": 1, "switch": 0, "url": ""},
+            ]
+        }
+        mock_zowietek_client.async_get_ndi_config.return_value = {
+            **mock_ndi_config,
+            "switch": 1,  # NDI on
+        }
+        mock_zowietek_client.async_get_audio_info.return_value = mock_audio_info
+
+        # Register device in registry
+        from homeassistant.helpers import device_registry as dr
+
+        device_registry = dr.async_get(hass)
+        device_registry.async_get_or_create(
+            config_entry_id=mock_config_entry.entry_id,
+            identifiers={(DOMAIN, str(mock_config_entry.unique_id))},
+        )
+
+        coordinator = ZowietekCoordinator(hass, mock_config_entry)
+        await _refresh_coordinator(coordinator)
+
+        # Clear events from first fetch
+        events.clear()
+
+        # Second fetch: streaming is OFF (NDI disabled)
+        mock_zowietek_client.async_get_ndi_config.return_value = {
+            **mock_ndi_config,
+            "switch": 0,  # NDI off
+        }
+
+        await _refresh_coordinator(coordinator)
+        await hass.async_block_till_done()
+
+        # stream_stopped event should have fired
+        assert len(events) == 1
+        assert events[0]["type"] == "stream_stopped"
+
+    async def test_video_input_detected_trigger_fires_on_state_change(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+        mock_output_info: dict[str, str | int],
+        mock_venc_info: dict[str, list[dict[str, str | int | dict[str, str | int | list[str]]]]],
+        mock_ndi_config: dict[str, str | int],
+        mock_audio_info: dict[str, str | int | dict[str, str | int | list[str]]],
+    ) -> None:
+        """Test video_input_detected trigger fires when video signal goes from off to on."""
+        mock_config_entry.add_to_hass(hass)
+
+        events: list[dict[str, str]] = []
+
+        async def record_event(event: object) -> None:
+            """Record fired events."""
+            if hasattr(event, "data"):
+                events.append(event.data)  # type: ignore[union-attr]
+
+        hass.bus.async_listen(EVENT_TYPE, record_event)
+
+        # First fetch: no video input
+        mock_zowietek_client.async_get_input_signal.return_value = {
+            "hdmi_signal": 0,  # No signal
+            "width": 0,
+            "height": 0,
+            "framerate": 0,
+        }
+        mock_zowietek_client.async_get_output_info.return_value = mock_output_info
+        mock_zowietek_client.async_get_venc_info.return_value = mock_venc_info
+        mock_zowietek_client.async_get_stream_publish_info.return_value = {"publish": []}
+        mock_zowietek_client.async_get_ndi_config.return_value = mock_ndi_config
+        mock_zowietek_client.async_get_audio_info.return_value = mock_audio_info
+
+        # Register device in registry
+        from homeassistant.helpers import device_registry as dr
+
+        device_registry = dr.async_get(hass)
+        device_registry.async_get_or_create(
+            config_entry_id=mock_config_entry.entry_id,
+            identifiers={(DOMAIN, str(mock_config_entry.unique_id))},
+        )
+
+        coordinator = ZowietekCoordinator(hass, mock_config_entry)
+        await _refresh_coordinator(coordinator)
+
+        # Clear events from first fetch
+        events.clear()
+
+        # Second fetch: video input detected
+        mock_zowietek_client.async_get_input_signal.return_value = {
+            "hdmi_signal": 1,  # Signal detected
+            "width": 1920,
+            "height": 1080,
+            "framerate": 60,
+        }
+
+        await _refresh_coordinator(coordinator)
+        await hass.async_block_till_done()
+
+        # video_input_detected event should have fired
+        assert len(events) == 1
+        assert events[0]["type"] == "video_input_detected"
+
+    async def test_video_input_lost_trigger_fires_on_state_change(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+        mock_input_signal: dict[str, str | int],
+        mock_output_info: dict[str, str | int],
+        mock_venc_info: dict[str, list[dict[str, str | int | dict[str, str | int | list[str]]]]],
+        mock_ndi_config: dict[str, str | int],
+        mock_audio_info: dict[str, str | int | dict[str, str | int | list[str]]],
+    ) -> None:
+        """Test video_input_lost trigger fires when video signal goes from on to off."""
+        mock_config_entry.add_to_hass(hass)
+
+        events: list[dict[str, str]] = []
+
+        async def record_event(event: object) -> None:
+            """Record fired events."""
+            if hasattr(event, "data"):
+                events.append(event.data)  # type: ignore[union-attr]
+
+        hass.bus.async_listen(EVENT_TYPE, record_event)
+
+        # First fetch: video input detected
+        mock_zowietek_client.async_get_input_signal.return_value = mock_input_signal
+        mock_zowietek_client.async_get_output_info.return_value = mock_output_info
+        mock_zowietek_client.async_get_venc_info.return_value = mock_venc_info
+        mock_zowietek_client.async_get_stream_publish_info.return_value = {"publish": []}
+        mock_zowietek_client.async_get_ndi_config.return_value = mock_ndi_config
+        mock_zowietek_client.async_get_audio_info.return_value = mock_audio_info
+
+        # Register device in registry
+        from homeassistant.helpers import device_registry as dr
+
+        device_registry = dr.async_get(hass)
+        device_registry.async_get_or_create(
+            config_entry_id=mock_config_entry.entry_id,
+            identifiers={(DOMAIN, str(mock_config_entry.unique_id))},
+        )
+
+        coordinator = ZowietekCoordinator(hass, mock_config_entry)
+        await _refresh_coordinator(coordinator)
+
+        # Clear events from first fetch
+        events.clear()
+
+        # Second fetch: video input lost
+        mock_zowietek_client.async_get_input_signal.return_value = {
+            "hdmi_signal": 0,  # No signal
+            "width": 0,
+            "height": 0,
+            "framerate": 0,
+        }
+
+        await _refresh_coordinator(coordinator)
+        await hass.async_block_till_done()
+
+        # video_input_lost event should have fired
+        assert len(events) == 1
+        assert events[0]["type"] == "video_input_lost"
+
+    async def test_no_trigger_fires_on_first_fetch(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+        mock_input_signal: dict[str, str | int],
+        mock_output_info: dict[str, str | int],
+        mock_venc_info: dict[str, list[dict[str, str | int | dict[str, str | int | list[str]]]]],
+        mock_ndi_config: dict[str, str | int],
+        mock_audio_info: dict[str, str | int | dict[str, str | int | list[str]]],
+    ) -> None:
+        """Test no triggers fire on the first data fetch."""
+        mock_config_entry.add_to_hass(hass)
+
+        events: list[dict[str, str]] = []
+
+        async def record_event(event: object) -> None:
+            """Record fired events."""
+            if hasattr(event, "data"):
+                events.append(event.data)  # type: ignore[union-attr]
+
+        hass.bus.async_listen(EVENT_TYPE, record_event)
+
+        # Setup mocks with streaming and video input ON
+        mock_zowietek_client.async_get_input_signal.return_value = mock_input_signal
+        mock_zowietek_client.async_get_output_info.return_value = mock_output_info
+        mock_zowietek_client.async_get_venc_info.return_value = mock_venc_info
+        mock_zowietek_client.async_get_stream_publish_info.return_value = {"publish": []}
+        mock_zowietek_client.async_get_ndi_config.return_value = mock_ndi_config
+        mock_zowietek_client.async_get_audio_info.return_value = mock_audio_info
+
+        # Register device in registry
+        from homeassistant.helpers import device_registry as dr
+
+        device_registry = dr.async_get(hass)
+        device_registry.async_get_or_create(
+            config_entry_id=mock_config_entry.entry_id,
+            identifiers={(DOMAIN, str(mock_config_entry.unique_id))},
+        )
+
+        coordinator = ZowietekCoordinator(hass, mock_config_entry)
+        await _refresh_coordinator(coordinator)
+        await hass.async_block_till_done()
+
+        # No events should have fired on first fetch
+        assert len(events) == 0
+
+    async def test_no_trigger_when_state_unchanged(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+        mock_input_signal: dict[str, str | int],
+        mock_output_info: dict[str, str | int],
+        mock_venc_info: dict[str, list[dict[str, str | int | dict[str, str | int | list[str]]]]],
+        mock_ndi_config: dict[str, str | int],
+        mock_audio_info: dict[str, str | int | dict[str, str | int | list[str]]],
+    ) -> None:
+        """Test no triggers fire when state remains unchanged."""
+        mock_config_entry.add_to_hass(hass)
+
+        events: list[dict[str, str]] = []
+
+        async def record_event(event: object) -> None:
+            """Record fired events."""
+            if hasattr(event, "data"):
+                events.append(event.data)  # type: ignore[union-attr]
+
+        hass.bus.async_listen(EVENT_TYPE, record_event)
+
+        # Setup mocks with streaming and video input ON
+        mock_zowietek_client.async_get_input_signal.return_value = mock_input_signal
+        mock_zowietek_client.async_get_output_info.return_value = mock_output_info
+        mock_zowietek_client.async_get_venc_info.return_value = mock_venc_info
+        mock_zowietek_client.async_get_stream_publish_info.return_value = {"publish": []}
+        mock_zowietek_client.async_get_ndi_config.return_value = mock_ndi_config
+        mock_zowietek_client.async_get_audio_info.return_value = mock_audio_info
+
+        # Register device in registry
+        from homeassistant.helpers import device_registry as dr
+
+        device_registry = dr.async_get(hass)
+        device_registry.async_get_or_create(
+            config_entry_id=mock_config_entry.entry_id,
+            identifiers={(DOMAIN, str(mock_config_entry.unique_id))},
+        )
+
+        coordinator = ZowietekCoordinator(hass, mock_config_entry)
+        await _refresh_coordinator(coordinator)
+        events.clear()
+
+        # Second fetch with same state
+        await _refresh_coordinator(coordinator)
+        await hass.async_block_till_done()
+
+        # No events should have fired when state is unchanged
+        assert len(events) == 0

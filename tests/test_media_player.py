@@ -723,20 +723,24 @@ class TestMediaPlayerPlayMedia:
         call_args = mock_zowietek_client.async_add_decoding_url.call_args
         assert call_args[1]["url"] == "rtsp://new.stream/live"
 
-    async def test_play_media_with_name(
+    async def test_play_media_uses_ha_source_name(
         self,
         hass: HomeAssistant,
         mock_config_entry: MockConfigEntry,
         mock_zowietek_client: MagicMock,
     ) -> None:
-        """Test play_media can specify a custom name."""
-        from custom_components.zowietek.media_player import ZowietekMediaPlayer
+        """Test play_media always uses 'Home Assistant' as source name."""
+        from custom_components.zowietek.media_player import (
+            HA_SOURCE_NAME,
+            ZowietekMediaPlayer,
+        )
 
         await _setup_integration(hass, mock_config_entry)
 
         coordinator = mock_config_entry.runtime_data
         media_player = ZowietekMediaPlayer(coordinator)
 
+        # Even with extra title, we use HA_SOURCE_NAME
         await media_player.async_play_media(
             media_type="url",
             media_id="rtsp://new.stream/live",
@@ -744,7 +748,8 @@ class TestMediaPlayerPlayMedia:
         )
 
         call_args = mock_zowietek_client.async_add_decoding_url.call_args
-        assert call_args[1]["name"] == "Custom Stream Name"
+        # Source name should be HA_SOURCE_NAME, not the custom title
+        assert call_args[1]["name"] == HA_SOURCE_NAME
 
     async def test_play_media_requests_refresh(
         self,
@@ -764,6 +769,46 @@ class TestMediaPlayerPlayMedia:
         await media_player.async_play_media(media_type="url", media_id="rtsp://new.stream/live")
 
         coordinator.async_request_refresh.assert_called_once()
+
+    async def test_play_media_modifies_existing_ha_source(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test play_media modifies existing HA source instead of adding a new one."""
+        from custom_components.zowietek.media_player import (
+            HA_SOURCE_NAME,
+            ZowietekMediaPlayer,
+        )
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        # Include an existing "Home Assistant" source in the streamplay sources
+        coordinator.data.streamplay["sources"].append(
+            {
+                "index": 5,
+                "name": HA_SOURCE_NAME,
+                "url": "rtsp://old.stream/live",
+                "switch": 0,
+            }
+        )
+        media_player = ZowietekMediaPlayer(coordinator)
+
+        await media_player.async_play_media(
+            media_type="url",
+            media_id="rtsp://new.stream/live",
+        )
+
+        # Should modify existing source, not add a new one
+        mock_zowietek_client.async_add_decoding_url.assert_not_called()
+        mock_zowietek_client.async_modify_decoding_url.assert_called_once()
+        call_args = mock_zowietek_client.async_modify_decoding_url.call_args
+        assert call_args[1]["index"] == 5
+        assert call_args[1]["name"] == HA_SOURCE_NAME
+        assert call_args[1]["url"] == "rtsp://new.stream/live"
+        assert call_args[1]["switch"] is True
 
 
 class TestMediaPlayerExtraAttributes:

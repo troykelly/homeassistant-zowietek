@@ -831,10 +831,12 @@ class ZowietekClient:
             {
                 "group": "streamplay",
                 "opt": "streamplay_add",
-                "name": name,
-                "url": url,
-                "streamtype": streamtype,
-                "switch": 1 if switch else 0,
+                "data": {
+                    "name": name,
+                    "url": url,
+                    "streamtype": streamtype,
+                    "switch": 1 if switch else 0,
+                },
             },
             requires_auth=True,
         )
@@ -865,11 +867,13 @@ class ZowietekClient:
             {
                 "group": "streamplay",
                 "opt": "streamplay_modify",
-                "index": index,
-                "name": name,
-                "url": url,
-                "streamtype": streamtype,
-                "switch": 1 if switch else 0,
+                "data": {
+                    "index": index,
+                    "name": name,
+                    "url": url,
+                    "streamtype": streamtype,
+                    "switch": 1 if switch else 0,
+                },
             },
             requires_auth=True,
         )
@@ -889,7 +893,7 @@ class ZowietekClient:
             {
                 "group": "streamplay",
                 "opt": "streamplay_del",
-                "index": index,
+                "data": {"index": index},
             },
             requires_auth=True,
         )

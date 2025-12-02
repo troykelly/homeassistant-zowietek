@@ -30,6 +30,9 @@ _LOGGER = logging.getLogger(__name__)
 # Prefix for NDI sources in the source list
 NDI_SOURCE_PREFIX = "NDI: "
 
+# Name for the Home Assistant managed source (used for play_media)
+HA_SOURCE_NAME = "Home Assistant"
+
 
 class ZowietekMediaPlayer(ZowietekEntity, MediaPlayerEntity):
     """Media player entity for ZowieBox decoder functionality.
@@ -264,6 +267,27 @@ class ZowietekMediaPlayer(ZowietekEntity, MediaPlayerEntity):
 
             await self.coordinator.async_request_refresh()
 
+    def _find_ha_source_index(self) -> int | None:
+        """Find the index of the Home Assistant managed source.
+
+        Returns:
+            The index of the HA source, or None if not found.
+        """
+        if self.coordinator.data is None:
+            return None
+
+        streamplay_data = self.coordinator.data.streamplay
+        streamplay_list = streamplay_data.get("sources", [])
+        if not isinstance(streamplay_list, list):
+            return None
+
+        for entry in streamplay_list:
+            if isinstance(entry, dict) and entry.get("name") == HA_SOURCE_NAME:
+                index = entry.get("index")
+                if index is not None:
+                    return int(index)
+        return None
+
     async def async_play_media(
         self,
         media_type: str,
@@ -272,20 +296,17 @@ class ZowietekMediaPlayer(ZowietekEntity, MediaPlayerEntity):
     ) -> None:
         """Play a media URL.
 
-        Adds the URL as a new source and starts playback.
+        Uses a dedicated "Home Assistant" source that gets created once and
+        reused for subsequent play_media calls to avoid accumulating sources.
 
         Args:
             media_type: The type of media (e.g., "url").
             media_id: The URL to play.
-            kwargs: Additional arguments including 'extra' for metadata.
+            kwargs: Additional arguments (extra.title is ignored, we use HA_SOURCE_NAME).
 
         Raises:
             HomeAssistantError: If the media cannot be played.
         """
-        # Get optional name from extra data
-        extra = kwargs.get("extra") or {}
-        name = extra.get("title", f"Stream {media_id[:20]}")
-
         # Determine stream type from URL
         streamtype = 1  # Default to RTSP
         url_lower = media_id.lower()
@@ -297,12 +318,26 @@ class ZowietekMediaPlayer(ZowietekEntity, MediaPlayerEntity):
             streamtype = 4
 
         try:
-            await self.coordinator.client.async_add_decoding_url(
-                name=name,
-                url=media_id,
-                streamtype=streamtype,
-                switch=True,
-            )
+            # Check if we already have a "Home Assistant" source
+            ha_source_index = self._find_ha_source_index()
+
+            if ha_source_index is not None:
+                # Update existing source with new URL and activate it
+                await self.coordinator.client.async_modify_decoding_url(
+                    index=ha_source_index,
+                    name=HA_SOURCE_NAME,
+                    url=media_id,
+                    streamtype=streamtype,
+                    switch=True,
+                )
+            else:
+                # Create new "Home Assistant" source
+                await self.coordinator.client.async_add_decoding_url(
+                    name=HA_SOURCE_NAME,
+                    url=media_id,
+                    streamtype=streamtype,
+                    switch=True,
+                )
         except ZowietekApiError as err:
             _LOGGER.error("Failed to play media %s: %s", media_id, err)
             raise HomeAssistantError(f"Failed to play media: {err}") from err

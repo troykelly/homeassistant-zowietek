@@ -289,11 +289,13 @@ class TestZowietekClientAddDecodingUrl:
         json_data = call_args[1]["json"]
         assert json_data["group"] == "streamplay"
         assert json_data["opt"] == "streamplay_add"
-        assert json_data["name"] == "My Stream"
-        assert json_data["url"] == "rtsp://camera.local/stream"
-        assert json_data["streamtype"] == 1
-        assert json_data["switch"] == 1
         assert json_data["user"] == "admin"
+        # Parameters are nested under "data" key
+        data = json_data["data"]
+        assert data["name"] == "My Stream"
+        assert data["url"] == "rtsp://camera.local/stream"
+        assert data["streamtype"] == 1
+        assert data["switch"] == 1
 
     @pytest.mark.asyncio
     async def test_async_add_decoding_url_disabled(self) -> None:
@@ -322,7 +324,9 @@ class TestZowietekClientAddDecodingUrl:
 
         call_args = mock_session.post.call_args
         json_data = call_args[1]["json"]
-        assert json_data["switch"] == 0
+        # Parameters are nested under "data" key
+        data = json_data["data"]
+        assert data["switch"] == 0
 
     @pytest.mark.asyncio
     async def test_async_add_decoding_url_auth_failure(self) -> None:
@@ -384,10 +388,12 @@ class TestZowietekClientModifyDecodingUrl:
         json_data = call_args[1]["json"]
         assert json_data["group"] == "streamplay"
         assert json_data["opt"] == "streamplay_modify"
-        assert json_data["index"] == 0
-        assert json_data["name"] == "Updated Stream"
-        assert json_data["url"] == "rtsp://newcamera.local/stream"
         assert json_data["user"] == "admin"
+        # Parameters are nested under "data" key
+        data = json_data["data"]
+        assert data["index"] == 0
+        assert data["name"] == "Updated Stream"
+        assert data["url"] == "rtsp://newcamera.local/stream"
 
 
 class TestZowietekClientDeleteDecodingUrl:
@@ -417,8 +423,10 @@ class TestZowietekClientDeleteDecodingUrl:
         json_data = call_args[1]["json"]
         assert json_data["group"] == "streamplay"
         assert json_data["opt"] == "streamplay_del"
-        assert json_data["index"] == 1
         assert json_data["user"] == "admin"
+        # Parameters are nested under "data" key
+        data = json_data["data"]
+        assert data["index"] == 1
 
 
 class TestZowietekClientNdiDecoding:

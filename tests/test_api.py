@@ -1698,3 +1698,275 @@ class TestZowietekClientEncoderBitrateSetter:
 
         with pytest.raises(ZowietekAuthError):
             await client.async_set_encoder_bitrate(8000000)
+
+
+class TestZowietekClientSetNdiSettings:
+    """Tests for ZowietekClient NDI settings setter."""
+
+    @pytest.mark.asyncio
+    async def test_async_set_ndi_settings_name_only(self) -> None:
+        """Test setting NDI settings with name only.
+
+        The API first gets current config, then sends complete structure with changes.
+        When only name is provided, the existing group is preserved.
+        """
+        # First response: get current NDI config
+        get_response = _create_mock_response(
+            {
+                "status": STATUS_SUCCESS,
+                "rsp": "succeed",
+                "data": {
+                    "switch": 1,
+                    "mode_id": 3,
+                    "machinename": "OldName",
+                    "groups": "ExistingGroup",
+                    "multicast": {
+                        "ttl": 1,
+                        "enable": 0,
+                        "netmask": "255.255.0.0",
+                        "netprefix": "239.255.0.0",
+                    },
+                },
+            }
+        )
+        # Second response: set NDI config
+        set_response = _create_mock_response(
+            {
+                "status": STATUS_SUCCESS,
+                "rsp": "succeed",
+            }
+        )
+        mock_session = _create_mock_session(get_response)
+        # Set up side_effect to return different responses for each call
+        mock_session.post.return_value.__aenter__.side_effect = [
+            get_response,
+            set_response,
+        ]
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
+
+        await client.async_set_ndi_settings(name="MyNDISource")
+
+        # Check that two calls were made
+        assert mock_session.post.call_count == 2
+
+        # Check the set call (second call)
+        call_args = mock_session.post.call_args
+        json_data = call_args[1]["json"]
+        assert json_data["group"] == "ndi"
+        assert json_data["opt"] == "set_ndi_info"
+        assert json_data["data"]["machinename"] == "MyNDISource"
+        # Existing group should be preserved
+        assert json_data["data"]["groups"] == "ExistingGroup"
+        # Other fields from current config should be preserved
+        assert json_data["data"]["switch"] == 1
+        assert json_data["data"]["mode_id"] == 3
+        assert json_data["user"] == "admin"
+
+    @pytest.mark.asyncio
+    async def test_async_set_ndi_settings_with_group(self) -> None:
+        """Test setting NDI settings with name and group.
+
+        When group is provided, it should override the existing group.
+        """
+        # First response: get current NDI config
+        get_response = _create_mock_response(
+            {
+                "status": STATUS_SUCCESS,
+                "rsp": "succeed",
+                "data": {
+                    "switch": 0,
+                    "mode_id": 1,
+                    "machinename": "OldName",
+                    "groups": "OldGroup",
+                    "multicast": {
+                        "ttl": 1,
+                        "enable": 0,
+                        "netmask": "255.255.0.0",
+                        "netprefix": "239.255.0.0",
+                    },
+                },
+            }
+        )
+        # Second response: set NDI config
+        set_response = _create_mock_response(
+            {
+                "status": STATUS_SUCCESS,
+                "rsp": "succeed",
+            }
+        )
+        mock_session = _create_mock_session(get_response)
+        mock_session.post.return_value.__aenter__.side_effect = [
+            get_response,
+            set_response,
+        ]
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
+
+        await client.async_set_ndi_settings(name="MyNDISource", group="Production")
+
+        # Check that two calls were made
+        assert mock_session.post.call_count == 2
+
+        # Check the set call (second call)
+        call_args = mock_session.post.call_args
+        json_data = call_args[1]["json"]
+        assert json_data["group"] == "ndi"
+        assert json_data["opt"] == "set_ndi_info"
+        assert json_data["data"]["machinename"] == "MyNDISource"
+        # Group should be the new value
+        assert json_data["data"]["groups"] == "Production"
+
+
+class TestZowietekClientSetRtmpUrl:
+    """Tests for ZowietekClient RTMP URL setter."""
+
+    @pytest.mark.asyncio
+    async def test_async_set_rtmp_url_without_key(self) -> None:
+        """Test setting RTMP URL without stream key."""
+        mock_response = _create_mock_response(
+            {
+                "status": STATUS_SUCCESS,
+                "rsp": "succeed",
+            }
+        )
+        mock_session = _create_mock_session(mock_response)
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
+
+        await client.async_set_rtmp_url(url="rtmp://live.example.com/live")
+
+        call_args = mock_session.post.call_args
+        json_data = call_args[1]["json"]
+        assert json_data["group"] == "publish"
+        assert json_data["opt"] == "update_publish_url"
+        assert json_data["data"]["url"] == "rtmp://live.example.com/live"
+        assert json_data["data"]["type"] == "rtmp"
+        assert json_data["data"]["index"] == 0
+        assert json_data["user"] == "admin"
+
+    @pytest.mark.asyncio
+    async def test_async_set_rtmp_url_with_key(self) -> None:
+        """Test setting RTMP URL with stream key."""
+        mock_response = _create_mock_response(
+            {
+                "status": STATUS_SUCCESS,
+                "rsp": "succeed",
+            }
+        )
+        mock_session = _create_mock_session(mock_response)
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
+
+        await client.async_set_rtmp_url(url="rtmp://live.example.com/live", key="mykey")
+
+        call_args = mock_session.post.call_args
+        json_data = call_args[1]["json"]
+        assert json_data["data"]["url"] == "rtmp://live.example.com/live/mykey"
+
+
+class TestZowietekClientSetSrtSettings:
+    """Tests for ZowietekClient SRT settings setter."""
+
+    @pytest.mark.asyncio
+    async def test_async_set_srt_settings_port_only(self) -> None:
+        """Test setting SRT settings with port only."""
+        mock_response = _create_mock_response(
+            {
+                "status": STATUS_SUCCESS,
+                "rsp": "succeed",
+            }
+        )
+        mock_session = _create_mock_session(mock_response)
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
+
+        await client.async_set_srt_settings(port=9000)
+
+        call_args = mock_session.post.call_args
+        json_data = call_args[1]["json"]
+        assert json_data["group"] == "publish"
+        assert json_data["opt"] == "update_srt_info"
+        assert json_data["data"]["port"] == 9000
+        assert json_data["data"]["type"] == "srt"
+        assert json_data["data"]["index"] == 1
+        assert "latency" not in json_data["data"]
+        assert "passphrase" not in json_data["data"]
+        assert json_data["user"] == "admin"
+
+    @pytest.mark.asyncio
+    async def test_async_set_srt_settings_with_latency(self) -> None:
+        """Test setting SRT settings with port and latency."""
+        mock_response = _create_mock_response(
+            {
+                "status": STATUS_SUCCESS,
+                "rsp": "succeed",
+            }
+        )
+        mock_session = _create_mock_session(mock_response)
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
+
+        await client.async_set_srt_settings(port=9000, latency=120)
+
+        call_args = mock_session.post.call_args
+        json_data = call_args[1]["json"]
+        assert json_data["data"]["port"] == 9000
+        assert json_data["data"]["latency"] == 120
+        assert "passphrase" not in json_data["data"]
+
+    @pytest.mark.asyncio
+    async def test_async_set_srt_settings_with_all_params(self) -> None:
+        """Test setting SRT settings with all parameters."""
+        mock_response = _create_mock_response(
+            {
+                "status": STATUS_SUCCESS,
+                "rsp": "succeed",
+            }
+        )
+        mock_session = _create_mock_session(mock_response)
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
+
+        await client.async_set_srt_settings(port=9000, latency=120, passphrase="secretkey")
+
+        call_args = mock_session.post.call_args
+        json_data = call_args[1]["json"]
+        assert json_data["data"]["port"] == 9000
+        assert json_data["data"]["latency"] == 120
+        assert json_data["data"]["passphrase"] == "secretkey"

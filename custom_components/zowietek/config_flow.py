@@ -6,7 +6,7 @@ import logging
 from typing import TYPE_CHECKING
 
 import voluptuous as vol
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 
 from .api import ZowietekClient
@@ -18,6 +18,7 @@ from .exceptions import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from typing import Any
 
 _LOGGER = logging.getLogger(__name__)
@@ -30,11 +31,22 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
     }
 )
 
+STEP_REAUTH_DATA_SCHEMA = vol.Schema(
+    {
+        vol.Required(CONF_USERNAME): str,
+        vol.Required(CONF_PASSWORD): str,
+    }
+)
+
 
 class ZowietekConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Zowietek."""
 
     VERSION = 1
+
+    def __init__(self) -> None:
+        """Initialize the config flow."""
+        self._reauth_entry: ConfigEntry[Any] | None = None
 
     async def async_step_user(
         self,
@@ -197,3 +209,100 @@ class ZowietekConfigFlow(ConfigFlow, domain=DOMAIN):
                 return f"ZowieBox ({hostname})"
 
         return "ZowieBox"
+
+    async def async_step_reauth(
+        self,
+        entry_data: Mapping[str, Any],
+    ) -> ConfigFlowResult:
+        """Handle reauthentication.
+
+        This is called when the coordinator raises ConfigEntryAuthFailed,
+        indicating that the stored credentials are no longer valid.
+
+        Args:
+            entry_data: The current config entry data.
+
+        Returns:
+            ConfigFlowResult forwarding to reauth_confirm step.
+        """
+        self._reauth_entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> ConfigFlowResult:
+        """Handle reauthentication confirmation.
+
+        Shows a form for the user to enter new credentials. The host is
+        preserved from the original entry and cannot be changed.
+
+        Args:
+            user_input: The user input from the form, or None on first call.
+
+        Returns:
+            ConfigFlowResult with form on error or abort on success.
+        """
+        errors: dict[str, str] = {}
+
+        if user_input is not None and self._reauth_entry is not None:
+            host = self._reauth_entry.data[CONF_HOST]
+            username = user_input[CONF_USERNAME]
+            password = user_input[CONF_PASSWORD]
+
+            # Validate new credentials
+            valid = await self._async_validate_reauth(host, username, password, errors)
+
+            if valid:
+                return self.async_update_reload_and_abort(
+                    self._reauth_entry,
+                    data_updates={
+                        CONF_USERNAME: username,
+                        CONF_PASSWORD: password,
+                    },
+                )
+
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=STEP_REAUTH_DATA_SCHEMA,
+            errors=errors,
+        )
+
+    async def _async_validate_reauth(
+        self,
+        host: str,
+        username: str,
+        password: str,
+        errors: dict[str, str],
+    ) -> bool:
+        """Validate credentials for reauthentication.
+
+        Args:
+            host: The host/IP address of the device.
+            username: The new username.
+            password: The new password.
+            errors: Dictionary to populate with any errors.
+
+        Returns:
+            True if credentials are valid, False otherwise.
+        """
+        async with ZowietekClient(host, username, password) as client:
+            try:
+                # Test connectivity and validate credentials
+                await client.async_test_connection()
+                await client.async_validate_credentials()
+                return True
+            except ZowietekAuthError:
+                _LOGGER.debug("Reauthentication failed for %s", host)
+                errors["base"] = "invalid_auth"
+            except ZowietekConnectionError:
+                _LOGGER.debug("Cannot connect to %s during reauth", host)
+                errors["base"] = "cannot_connect"
+            except ZowietekError as err:
+                _LOGGER.debug("API error during reauth to %s: %s", host, err)
+                errors["base"] = "cannot_connect"
+            except Exception:
+                _LOGGER.exception("Unexpected error during reauth to %s", host)
+                errors["base"] = "unknown"
+
+        return False

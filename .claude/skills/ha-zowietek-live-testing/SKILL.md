@@ -12,6 +12,7 @@ description: Use when ANY code implementation is complete - MANDATORY validation
 Issue #8 proved this conclusively: the original API client had 100% test coverage with all tests passing, but was completely broken against real devices. The API format assumptions were entirely wrong.
 
 This skill defines mandatory procedures for validating code against:
+
 1. Real ZowieBox devices
 2. Dev Home Assistant instance
 
@@ -61,6 +62,7 @@ print(f"Secondary device: {zowietek_url_2}")
 ### When Required
 
 Test against real ZowieBox devices when changing:
+
 - `api.py` - Any API client code
 - `coordinator.py` - Data fetching logic
 - `config_flow.py` - Connection/authentication logic
@@ -149,14 +151,14 @@ if __name__ == "__main__":
 
 ### What to Verify
 
-| Area | Check |
-|------|-------|
-| **Connection** | Device responds to requests |
-| **Authentication** | Credentials are accepted |
-| **Data Retrieval** | All GET endpoints return valid data |
-| **Data Format** | Response structure matches TypedDict definitions |
-| **Write Operations** | SET operations work (test carefully!) |
-| **Error Handling** | Invalid requests return expected errors |
+| Area                 | Check                                            |
+| -------------------- | ------------------------------------------------ |
+| **Connection**       | Device responds to requests                      |
+| **Authentication**   | Credentials are accepted                         |
+| **Data Retrieval**   | All GET endpoints return valid data              |
+| **Data Format**      | Response structure matches TypedDict definitions |
+| **Write Operations** | SET operations work (test carefully!)            |
+| **Error Handling**   | Invalid requests return expected errors          |
 
 ### Testing Write Operations
 
@@ -192,6 +194,7 @@ async def test_write_operations(client: ZowietekClient) -> None:
 ### When Required
 
 Test in dev HA instance when changing:
+
 - `__init__.py` - Integration setup/teardown
 - `config_flow.py` - Configuration UI
 - `coordinator.py` - Data update coordinator
@@ -213,6 +216,22 @@ ln -sf /workspaces/homeassistant-zowietek/custom_components \
 cat > /workspaces/homeassistant-zowietek/config/configuration.yaml << 'EOF'
 # Home Assistant Dev Configuration
 default_config:
+
+http:
+  use_x_forwarded_for: true
+  trusted_proxies:
+    - 0.0.0.0/0
+    - ::/0
+  ip_ban_enabled: false
+
+homeassistant:
+  auth_providers:
+    - type: trusted_networks
+      trusted_networks:
+        - 0.0.0.0/0
+        - ::/0
+      allow_bypass_login: true
+    - type: homeassistant
 
 logger:
   default: info
@@ -236,6 +255,7 @@ hass -c /workspaces/homeassistant-zowietek/config &
 ```
 
 Wait for HA to start (typically 30-60 seconds). Look for:
+
 ```
 INFO (MainThread) [homeassistant.core] Starting Home Assistant
 ```
@@ -258,6 +278,7 @@ First run will require onboarding. Complete with test account.
 5. Click Submit
 
 **Verify:**
+
 - [ ] Config flow shows correct form
 - [ ] Validation works (try wrong credentials)
 - [ ] Device is added successfully
@@ -272,6 +293,7 @@ After config flow completes:
 3. Review all entities
 
 **Verify:**
+
 - [ ] All expected entities are created
 - [ ] Entity states show real device values
 - [ ] Sensors update (wait for coordinator refresh)
@@ -288,6 +310,7 @@ tail -f /workspaces/homeassistant-zowietek/config/home-assistant.log | grep -i z
 ```
 
 **Verify no errors:**
+
 - [ ] No exceptions in logs
 - [ ] No authentication errors
 - [ ] No connection timeouts
@@ -306,6 +329,7 @@ hass -c /workspaces/homeassistant-zowietek/config &
 ```
 
 **Verify:**
+
 - [ ] Integration reloads without error
 - [ ] Entities recover correctly
 - [ ] No duplicate entities
@@ -327,6 +351,7 @@ After live testing, document results in the PR or issue.
 **CRITICAL: NEVER include real hostnames, URLs, or IP addresses in documentation!**
 
 This is a security requirement. Real infrastructure details must never appear in:
+
 - Commit messages
 - Pull request descriptions
 - Issue comments
@@ -338,6 +363,7 @@ This is a security requirement. Real infrastructure details must never appear in
 ## Live Testing Results
 
 ### Device Testing
+
 - **Device:** [ZOWIETEK_URL from environment]
   - Connection: OK
   - Authentication: OK
@@ -346,6 +372,7 @@ This is a security requirement. Real infrastructure details must never appear in
   - Required endpoints: OK
 
 ### Home Assistant Testing
+
 - Config flow: OK
 - Entity creation: OK
 - State updates: OK
@@ -353,6 +380,7 @@ This is a security requirement. Real infrastructure details must never appear in
 - Logs: No errors
 
 ### Summary
+
 Live device testing passed against device(s) from environment variables.
 ```
 
@@ -362,9 +390,10 @@ Live device testing passed against device(s) from environment variables.
 ## Live Testing Results
 
 ### Device Testing
-- **Device:** http://zow001.company.internal.com  <-- SECURITY VIOLATION!
-- **Device:** 192.168.1.100  <-- SECURITY VIOLATION!
-- **Device:** zowiebox.office.example.net  <-- SECURITY VIOLATION!
+
+- **Device:** http://zow001.company.internal.com <-- SECURITY VIOLATION!
+- **Device:** 192.168.1.100 <-- SECURITY VIOLATION!
+- **Device:** zowiebox.office.example.net <-- SECURITY VIOLATION!
 ```
 
 ### What You CAN Include
@@ -396,13 +425,13 @@ The Issue #8 Lesson: A complete API rewrite was needed because live testing reve
 
 ## Red Flags
 
-| Warning Sign | Action |
-|--------------|--------|
-| "Unit tests pass" without live test | NOT complete, run live tests |
-| "Device not available" | Check env vars, ask for access |
-| "Works on my machine" | Test on ALL available devices |
-| "Just a small change" | ALL changes need live testing |
-| "I tested it manually once" | Document the tests, make repeatable |
+| Warning Sign                        | Action                              |
+| ----------------------------------- | ----------------------------------- |
+| "Unit tests pass" without live test | NOT complete, run live tests        |
+| "Device not available"              | Check env vars, ask for access      |
+| "Works on my machine"               | Test on ALL available devices       |
+| "Just a small change"               | ALL changes need live testing       |
+| "I tested it manually once"         | Document the tests, make repeatable |
 
 ## The Bottom Line
 

@@ -531,6 +531,48 @@ class TestDeviceTriggerFiring:
         assert len(calls) == 0
 
 
+class TestDeviceTriggerEdgeCases:
+    """Test edge cases in async_get_triggers."""
+
+    async def test_get_triggers_returns_empty_for_unknown_device(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry_with_device: MockConfigEntry,
+    ) -> None:
+        """Test that get_triggers returns empty list for unknown device."""
+        from custom_components.zowietek.device_trigger import async_get_triggers
+
+        await setup_integration(hass, mock_config_entry_with_device)
+
+        # Use a fake device_id that doesn't exist
+        triggers = await async_get_triggers(hass, "nonexistent-device-id")
+
+        assert triggers == []
+
+    async def test_get_triggers_returns_empty_for_non_zowietek_device(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry_with_device: MockConfigEntry,
+    ) -> None:
+        """Test that get_triggers returns empty list for non-zowietek device."""
+        from custom_components.zowietek.device_trigger import async_get_triggers
+
+        await setup_integration(hass, mock_config_entry_with_device)
+
+        # Create a fake device entry for a different domain
+        device_registry = dr.async_get(hass)
+        other_device = device_registry.async_get_or_create(
+            config_entry_id=mock_config_entry_with_device.entry_id,
+            identifiers={("other_domain", "other-device-123")},
+            name="Other Device",
+        )
+
+        # Get triggers for this non-zowietek device
+        triggers = await async_get_triggers(hass, other_device.id)
+
+        assert triggers == []
+
+
 class TestDeviceTriggerSchema:
     """Test trigger schema validation."""
 

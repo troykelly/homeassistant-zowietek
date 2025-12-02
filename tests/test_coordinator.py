@@ -1594,3 +1594,93 @@ class TestZowietekCoordinatorDeviceTriggers:
 
         # No events should have fired when state is unchanged
         assert len(events) == 0
+
+
+class TestCoordinatorEdgeCases:
+    """Test edge cases in coordinator data processing."""
+
+    async def test_trigger_not_fired_when_device_not_registered(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+        mock_input_signal: dict[str, str | int],
+        mock_output_info: dict[str, str | int],
+        mock_venc_info: dict[str, list[dict[str, str | int | dict[str, str | int | list[str]]]]],
+        mock_ndi_config: dict[str, str | int],
+        mock_audio_info: dict[str, str | int | dict[str, str | int | list[str]]],
+    ) -> None:
+        """Test that trigger is not fired when device is not in registry."""
+        mock_config_entry.add_to_hass(hass)
+
+        events: list[dict[str, str]] = []
+
+        async def record_event(event: object) -> None:
+            """Record fired events."""
+            if hasattr(event, "data"):
+                events.append(event.data)  # type: ignore[union-attr]
+
+        hass.bus.async_listen(EVENT_TYPE, record_event)
+
+        # Setup mocks - start with no streaming, no video input
+        mock_input_signal_off = dict(mock_input_signal)
+        mock_input_signal_off["hdmi_signal"] = 0
+        mock_ndi_config_off = dict(mock_ndi_config)
+        mock_ndi_config_off["switch"] = 0
+
+        mock_zowietek_client.async_get_input_signal.return_value = mock_input_signal_off
+        mock_zowietek_client.async_get_output_info.return_value = mock_output_info
+        mock_zowietek_client.async_get_venc_info.return_value = mock_venc_info
+        mock_zowietek_client.async_get_stream_publish_info.return_value = {"publish": []}
+        mock_zowietek_client.async_get_ndi_config.return_value = mock_ndi_config_off
+        mock_zowietek_client.async_get_audio_info.return_value = mock_audio_info
+
+        # NOTE: Do NOT register device in registry - this tests the edge case
+        # where _get_ha_device_id returns None
+
+        coordinator = ZowietekCoordinator(hass, mock_config_entry)
+        await _refresh_coordinator(coordinator)
+        events.clear()
+
+        # Now change state to trigger events
+        mock_zowietek_client.async_get_input_signal.return_value = mock_input_signal
+        mock_zowietek_client.async_get_ndi_config.return_value = mock_ndi_config
+
+        await _refresh_coordinator(coordinator)
+        await hass.async_block_till_done()
+
+        # No events should have fired because device is not registered
+        assert len(events) == 0
+
+    async def test_streamplay_sources_handles_non_list(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+        mock_input_signal: dict[str, str | int],
+        mock_output_info: dict[str, str | int],
+        mock_venc_info: dict[str, list[dict[str, str | int | dict[str, str | int | list[str]]]]],
+        mock_ndi_config: dict[str, str | int],
+        mock_audio_info: dict[str, str | int | dict[str, str | int | list[str]]],
+    ) -> None:
+        """Test that streamplay sources handles non-list data gracefully."""
+        mock_config_entry.add_to_hass(hass)
+
+        mock_zowietek_client.async_get_input_signal.return_value = mock_input_signal
+        mock_zowietek_client.async_get_output_info.return_value = mock_output_info
+        mock_zowietek_client.async_get_venc_info.return_value = mock_venc_info
+        mock_zowietek_client.async_get_stream_publish_info.return_value = {"publish": []}
+        mock_zowietek_client.async_get_ndi_config.return_value = mock_ndi_config
+        mock_zowietek_client.async_get_audio_info.return_value = mock_audio_info
+
+        # Return streamplay with non-list value
+        mock_zowietek_client.async_get_streamplay_info.return_value = {
+            "streamplay": "not_a_list"  # Invalid - should be a list
+        }
+
+        coordinator = ZowietekCoordinator(hass, mock_config_entry)
+        await _refresh_coordinator(coordinator)
+
+        # Should have created empty sources list
+        assert coordinator.data is not None
+        assert coordinator.data.streamplay["sources"] == []

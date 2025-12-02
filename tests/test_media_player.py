@@ -1144,6 +1144,418 @@ class TestMediaPlayerTurnOff:
         assert "Failed to put device into standby" in str(exc_info.value)
 
 
+class TestMediaPlayerSourceListEdgeCases:
+    """Tests for edge cases in source list handling."""
+
+    async def test_source_list_returns_empty_when_no_data(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test source_list returns empty list when coordinator has no data."""
+        from custom_components.zowietek.media_player import ZowietekMediaPlayer
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        coordinator.data = None
+
+        media_player = ZowietekMediaPlayer(coordinator)
+
+        assert media_player.source_list == []
+
+    async def test_source_returns_none_when_no_data(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test source returns None when coordinator has no data."""
+        from custom_components.zowietek.media_player import ZowietekMediaPlayer
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        coordinator.data = None
+
+        media_player = ZowietekMediaPlayer(coordinator)
+
+        assert media_player.source is None
+
+    async def test_source_returns_none_when_no_active_source(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test source returns None when decoder has no active_source field."""
+        from custom_components.zowietek.media_player import ZowietekMediaPlayer
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        # Remove active_source from decoder_status
+        coordinator.data.decoder_status["active_source"] = ""
+
+        media_player = ZowietekMediaPlayer(coordinator)
+
+        assert media_player.source is None
+
+    async def test_extra_attributes_returns_none_when_no_data(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test extra_state_attributes returns None when coordinator has no data."""
+        from custom_components.zowietek.media_player import ZowietekMediaPlayer
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        coordinator.data = None
+
+        media_player = ZowietekMediaPlayer(coordinator)
+
+        assert media_player.extra_state_attributes is None
+
+
+class TestMediaPlayerFindSourceEdgeCases:
+    """Tests for edge cases in source finding methods."""
+
+    async def test_find_source_index_returns_none_when_no_data(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test _find_source_index returns None when coordinator has no data."""
+        from custom_components.zowietek.media_player import ZowietekMediaPlayer
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        coordinator.data = None
+
+        media_player = ZowietekMediaPlayer(coordinator)
+
+        assert media_player._find_source_index("Test") is None
+
+    async def test_find_source_index_returns_none_when_invalid_sources(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test _find_source_index returns None when sources is not a list."""
+        from custom_components.zowietek.media_player import ZowietekMediaPlayer
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        coordinator.data.streamplay["sources"] = "not_a_list"
+
+        media_player = ZowietekMediaPlayer(coordinator)
+
+        assert media_player._find_source_index("Test") is None
+
+    async def test_find_source_index_returns_none_when_not_found(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test _find_source_index returns None when source name not found."""
+        from custom_components.zowietek.media_player import ZowietekMediaPlayer
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        media_player = ZowietekMediaPlayer(coordinator)
+
+        assert media_player._find_source_index("Nonexistent Source") is None
+
+    async def test_find_ha_source_index_returns_none_when_no_data(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test _find_ha_source_index returns None when coordinator has no data."""
+        from custom_components.zowietek.media_player import ZowietekMediaPlayer
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        coordinator.data = None
+
+        media_player = ZowietekMediaPlayer(coordinator)
+
+        assert media_player._find_ha_source_index() is None
+
+    async def test_find_ha_source_index_returns_none_when_invalid_sources(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test _find_ha_source_index returns None when sources is not a list."""
+        from custom_components.zowietek.media_player import ZowietekMediaPlayer
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        coordinator.data.streamplay["sources"] = "not_a_list"
+
+        media_player = ZowietekMediaPlayer(coordinator)
+
+        assert media_player._find_ha_source_index() is None
+
+    async def test_find_source_by_url_returns_none_when_no_data(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test _find_source_by_url returns None when coordinator has no data."""
+        from custom_components.zowietek.media_player import ZowietekMediaPlayer
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        coordinator.data = None
+
+        media_player = ZowietekMediaPlayer(coordinator)
+
+        assert media_player._find_source_by_url("rtsp://test/stream") is None
+
+    async def test_find_source_by_url_returns_none_when_invalid_sources(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test _find_source_by_url returns None when sources is not a list."""
+        from custom_components.zowietek.media_player import ZowietekMediaPlayer
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        coordinator.data.streamplay["sources"] = "not_a_list"
+
+        media_player = ZowietekMediaPlayer(coordinator)
+
+        assert media_player._find_source_by_url("rtsp://test/stream") is None
+
+
+class TestMediaPlayerSelectSourceEdgeCases:
+    """Tests for edge cases in select source action."""
+
+    async def test_select_source_not_found_raises_error(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test selecting a non-existent source raises HomeAssistantError."""
+        from homeassistant.exceptions import HomeAssistantError
+
+        from custom_components.zowietek.media_player import ZowietekMediaPlayer
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        media_player = ZowietekMediaPlayer(coordinator)
+
+        with pytest.raises(HomeAssistantError) as exc_info:
+            await media_player.async_select_source("Nonexistent Source")
+
+        assert "Source not found" in str(exc_info.value)
+
+
+class TestMediaPlayerPlayEdgeCases:
+    """Tests for edge cases in play action."""
+
+    async def test_play_returns_early_when_no_data(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test async_media_play returns early when coordinator has no data."""
+        from custom_components.zowietek.media_player import ZowietekMediaPlayer
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        coordinator.data = None
+
+        media_player = ZowietekMediaPlayer(coordinator)
+
+        # Should not raise, just return early
+        await media_player.async_media_play()
+
+        # Should not have called the API
+        mock_zowietek_client.async_select_streamplay_source.assert_not_called()
+
+    async def test_play_returns_when_no_sources_available(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test async_media_play returns when no sources are available."""
+        from custom_components.zowietek.media_player import ZowietekMediaPlayer
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        coordinator.data.streamplay["sources"] = []
+
+        media_player = ZowietekMediaPlayer(coordinator)
+
+        # Should not raise, just log warning and return
+        await media_player.async_media_play()
+
+        # Should not have called the API
+        mock_zowietek_client.async_select_streamplay_source.assert_not_called()
+
+    async def test_play_returns_when_sources_not_a_list(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test async_media_play returns when sources is not a list."""
+        from custom_components.zowietek.media_player import ZowietekMediaPlayer
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        coordinator.data.streamplay["sources"] = "not_a_list"
+
+        media_player = ZowietekMediaPlayer(coordinator)
+
+        # Should not raise, just log warning and return
+        await media_player.async_media_play()
+
+        # Should not have called the API
+        mock_zowietek_client.async_select_streamplay_source.assert_not_called()
+
+    async def test_play_api_error_raises_ha_error(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test async_media_play raises HomeAssistantError when API fails."""
+        from homeassistant.exceptions import HomeAssistantError
+
+        from custom_components.zowietek.exceptions import ZowietekApiError
+        from custom_components.zowietek.media_player import ZowietekMediaPlayer
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        mock_zowietek_client.async_select_streamplay_source.side_effect = ZowietekApiError(
+            "Device not responding", "00000"
+        )
+
+        media_player = ZowietekMediaPlayer(coordinator)
+
+        with pytest.raises(HomeAssistantError) as exc_info:
+            await media_player.async_media_play()
+
+        assert "Failed to start playback" in str(exc_info.value)
+
+
+class TestMediaPlayerPlayMediaStreamTypes:
+    """Tests for different stream type detection in play_media."""
+
+    async def test_play_media_detects_rtmp_stream(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test play_media correctly detects RTMP stream type."""
+        from custom_components.zowietek.media_player import ZowietekMediaPlayer
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        media_player = ZowietekMediaPlayer(coordinator)
+
+        await media_player.async_play_media(
+            media_type="url", media_id="rtmp://live.example.com/live/key"
+        )
+
+        call_args = mock_zowietek_client.async_add_decoding_url.call_args
+        assert call_args[1]["streamtype"] == 2  # RTMP
+
+    async def test_play_media_detects_srt_stream(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test play_media correctly detects SRT stream type."""
+        from custom_components.zowietek.media_player import ZowietekMediaPlayer
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        media_player = ZowietekMediaPlayer(coordinator)
+
+        await media_player.async_play_media(media_type="url", media_id="srt://192.168.1.1:9000")
+
+        call_args = mock_zowietek_client.async_add_decoding_url.call_args
+        assert call_args[1]["streamtype"] == 3  # SRT
+
+    async def test_play_media_detects_http_stream(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test play_media correctly detects HTTP stream type."""
+        from custom_components.zowietek.media_player import ZowietekMediaPlayer
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        media_player = ZowietekMediaPlayer(coordinator)
+
+        await media_player.async_play_media(
+            media_type="url", media_id="http://example.com/stream.m3u8"
+        )
+
+        call_args = mock_zowietek_client.async_add_decoding_url.call_args
+        assert call_args[1]["streamtype"] == 4  # HTTP
+
+    async def test_play_media_detects_https_stream(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test play_media correctly detects HTTPS stream type."""
+        from custom_components.zowietek.media_player import ZowietekMediaPlayer
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        media_player = ZowietekMediaPlayer(coordinator)
+
+        await media_player.async_play_media(
+            media_type="url", media_id="https://example.com/stream.m3u8"
+        )
+
+        call_args = mock_zowietek_client.async_add_decoding_url.call_args
+        assert call_args[1]["streamtype"] == 4  # HTTP/HTTPS
+
+
 class TestMediaPlayerTurnOn:
     """Tests for media player turn_on (wake) action."""
 

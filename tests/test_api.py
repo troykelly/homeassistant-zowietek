@@ -2066,3 +2066,94 @@ class TestZowietekClientPowerControl:
 
         with pytest.raises(ZowietekAuthError):
             await client.async_power_on()
+
+
+class TestStreamplayInfoEdgeCases:
+    """Test edge cases in streamplay info parsing."""
+
+    @pytest.mark.asyncio
+    async def test_async_get_streamplay_info_fallback_parsing(self) -> None:
+        """Test streamplay info uses fallback when data is neither list nor dict with streamplay."""
+        # Response where 'data' has no 'streamplay' key but top-level does
+        mock_response = _create_mock_response(
+            {
+                "status": "00000",
+                "rsp": "succeed",
+                "data": "unexpected_value",  # Not a list or dict
+                "streamplay": [  # Top-level streamplay should be used as fallback
+                    {"index": 0, "name": "Stream 1", "url": "rtsp://test/1"}
+                ],
+            }
+        )
+        mock_session = _create_mock_session(mock_response)
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
+
+        result = await client.async_get_streamplay_info()
+
+        assert "streamplay" in result
+        assert len(result["streamplay"]) == 1
+        assert result["streamplay"][0]["name"] == "Stream 1"
+
+    @pytest.mark.asyncio
+    async def test_async_get_streamplay_info_fallback_not_list(self) -> None:
+        """Test streamplay info returns empty list when fallback is not a list."""
+        mock_response = _create_mock_response(
+            {
+                "status": "00000",
+                "rsp": "succeed",
+                "data": "unexpected",
+                "streamplay": "not_a_list",  # Invalid fallback
+            }
+        )
+        mock_session = _create_mock_session(mock_response)
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
+
+        result = await client.async_get_streamplay_info()
+
+        assert "streamplay" in result
+        assert result["streamplay"] == []
+
+
+class TestNdiSourcesEdgeCases:
+    """Test edge cases in NDI sources retrieval."""
+
+    @pytest.mark.asyncio
+    async def test_async_get_ndi_sources_adds_default_key(self) -> None:
+        """Test that async_get_ndi_sources adds ndi_sources key if missing."""
+        # Response without ndi_sources key in data
+        mock_response = _create_mock_response(
+            {
+                "status": "00000",
+                "rsp": "succeed",
+                "data": {
+                    "some_other_key": "value"
+                    # No ndi_sources key
+                },
+            }
+        )
+        mock_session = _create_mock_session(mock_response)
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
+
+        result = await client.async_get_ndi_sources()
+
+        # Should have added ndi_sources key with empty list
+        assert "ndi_sources" in result
+        assert result["ndi_sources"] == []

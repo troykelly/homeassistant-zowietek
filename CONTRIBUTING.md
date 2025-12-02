@@ -172,7 +172,7 @@ Longer description if needed.
 
 **Types:** `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `perf`
 
-**Scopes:** `api`, `config-flow`, `sensor`, `switch`, `select`, `button`, `coordinator`, `services`, `ndi`, `rtmp`, `srt`
+**Scopes:** `api`, `config-flow`, `sensor`, `binary-sensor`, `switch`, `select`, `button`, `number`, `media-player`, `coordinator`, `services`, `discovery`, `triggers`, `ndi`, `rtmp`, `srt`
 
 **Examples:**
 ```
@@ -198,6 +198,10 @@ custom_components/zowietek/
 ├── switch.py             # Switch entities
 ├── select.py             # Select entities
 ├── button.py             # Button entities
+├── number.py             # Number entities
+├── media_player.py       # Media player entity (decoder)
+├── device_trigger.py     # Device automation triggers
+├── discovery.py          # UDP multicast device discovery
 ├── services.py           # Custom services
 ├── exceptions.py         # Custom exceptions
 └── diagnostics.py        # Diagnostic download

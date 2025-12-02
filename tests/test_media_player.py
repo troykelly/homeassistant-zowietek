@@ -268,6 +268,11 @@ def mock_zowietek_client(
         client.async_set_ndi_enabled = AsyncMock()
         client.async_set_stream_enabled = AsyncMock()
 
+        # Power control methods (standby/wake)
+        client.async_get_run_status = AsyncMock(return_value={"run_status": 1})
+        client.async_power_off = AsyncMock()
+        client.async_power_on = AsyncMock()
+
         client.close = AsyncMock()
         client.host = "http://192.168.1.100"
         yield client
@@ -407,6 +412,8 @@ class TestMediaPlayerFeatures:
             | MediaPlayerEntityFeature.STOP
             | MediaPlayerEntityFeature.SELECT_SOURCE
             | MediaPlayerEntityFeature.PLAY_MEDIA
+            | MediaPlayerEntityFeature.TURN_ON
+            | MediaPlayerEntityFeature.TURN_OFF
         )
 
         assert media_player.supported_features == expected_features
@@ -469,6 +476,28 @@ class TestMediaPlayerState:
         media_player = ZowietekMediaPlayer(coordinator)
 
         assert media_player.state is None
+
+    async def test_state_standby_when_device_in_standby(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test state is STANDBY when device is in standby mode."""
+        from custom_components.zowietek.media_player import ZowietekMediaPlayer
+
+        # Set device to standby (run_status: 0)
+        mock_zowietek_client.async_get_run_status.return_value = {"run_status": 0}
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        # Verify run_status is set to standby in coordinator data
+        coordinator.data.run_status["status"] = 0
+
+        media_player = ZowietekMediaPlayer(coordinator)
+
+        assert media_player.state == MediaPlayerState.STANDBY
 
 
 class TestMediaPlayerSourceList:
@@ -1046,3 +1075,137 @@ class TestMediaPlayerIcon:
         media_player = ZowietekMediaPlayer(coordinator)
 
         assert media_player.icon == "mdi:video-input-antenna"
+
+
+class TestMediaPlayerTurnOff:
+    """Tests for media player turn_off (standby) action."""
+
+    async def test_turn_off_calls_power_off_api(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test turn_off calls the power_off API method."""
+        from custom_components.zowietek.media_player import ZowietekMediaPlayer
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        media_player = ZowietekMediaPlayer(coordinator)
+
+        await media_player.async_turn_off()
+
+        mock_zowietek_client.async_power_off.assert_called_once()
+
+    async def test_turn_off_requests_refresh(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test turn_off requests coordinator refresh."""
+        from custom_components.zowietek.media_player import ZowietekMediaPlayer
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        coordinator.async_request_refresh = AsyncMock()
+        media_player = ZowietekMediaPlayer(coordinator)
+
+        await media_player.async_turn_off()
+
+        coordinator.async_request_refresh.assert_called_once()
+
+    async def test_turn_off_api_error_raises_ha_error(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test turn_off raises HomeAssistantError when API fails."""
+        from homeassistant.exceptions import HomeAssistantError
+
+        from custom_components.zowietek.exceptions import ZowietekApiError
+        from custom_components.zowietek.media_player import ZowietekMediaPlayer
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        mock_zowietek_client.async_power_off.side_effect = ZowietekApiError(
+            "Device not responding", "00000"
+        )
+
+        media_player = ZowietekMediaPlayer(coordinator)
+
+        with pytest.raises(HomeAssistantError) as exc_info:
+            await media_player.async_turn_off()
+
+        assert "Failed to put device into standby" in str(exc_info.value)
+
+
+class TestMediaPlayerTurnOn:
+    """Tests for media player turn_on (wake) action."""
+
+    async def test_turn_on_calls_power_on_api(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test turn_on calls the power_on API method."""
+        from custom_components.zowietek.media_player import ZowietekMediaPlayer
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        media_player = ZowietekMediaPlayer(coordinator)
+
+        await media_player.async_turn_on()
+
+        mock_zowietek_client.async_power_on.assert_called_once()
+
+    async def test_turn_on_requests_refresh(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test turn_on requests coordinator refresh."""
+        from custom_components.zowietek.media_player import ZowietekMediaPlayer
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        coordinator.async_request_refresh = AsyncMock()
+        media_player = ZowietekMediaPlayer(coordinator)
+
+        await media_player.async_turn_on()
+
+        coordinator.async_request_refresh.assert_called_once()
+
+    async def test_turn_on_api_error_raises_ha_error(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test turn_on raises HomeAssistantError when API fails."""
+        from homeassistant.exceptions import HomeAssistantError
+
+        from custom_components.zowietek.exceptions import ZowietekApiError
+        from custom_components.zowietek.media_player import ZowietekMediaPlayer
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        mock_zowietek_client.async_power_on.side_effect = ZowietekApiError(
+            "Device not responding", "00000"
+        )
+
+        media_player = ZowietekMediaPlayer(coordinator)
+
+        with pytest.raises(HomeAssistantError) as exc_info:
+            await media_player.async_turn_on()
+
+        assert "Failed to wake device" in str(exc_info.value)

@@ -288,6 +288,30 @@ class ZowietekMediaPlayer(ZowietekEntity, MediaPlayerEntity):
                     return int(index)
         return None
 
+    def _find_source_by_url(self, url: str) -> int | None:
+        """Find the index of a source by its URL.
+
+        Args:
+            url: The URL to search for.
+
+        Returns:
+            The index of the source with matching URL, or None if not found.
+        """
+        if self.coordinator.data is None:
+            return None
+
+        streamplay_data = self.coordinator.data.streamplay
+        streamplay_list = streamplay_data.get("sources", [])
+        if not isinstance(streamplay_list, list):
+            return None
+
+        for entry in streamplay_list:
+            if isinstance(entry, dict) and entry.get("url") == url:
+                index = entry.get("index")
+                if index is not None:
+                    return int(index)
+        return None
+
     async def async_play_media(
         self,
         media_type: str,
@@ -296,8 +320,10 @@ class ZowietekMediaPlayer(ZowietekEntity, MediaPlayerEntity):
     ) -> None:
         """Play a media URL.
 
-        Uses a dedicated "Home Assistant" source that gets created once and
-        reused for subsequent play_media calls to avoid accumulating sources.
+        First checks if the URL already exists as a configured source and switches
+        to it if found. Otherwise, uses a dedicated "Home Assistant" source that
+        gets created once and reused for subsequent play_media calls to avoid
+        accumulating sources.
 
         Args:
             media_type: The type of media (e.g., "url").
@@ -307,17 +333,25 @@ class ZowietekMediaPlayer(ZowietekEntity, MediaPlayerEntity):
         Raises:
             HomeAssistantError: If the media cannot be played.
         """
-        # Determine stream type from URL
-        streamtype = 1  # Default to RTSP
-        url_lower = media_id.lower()
-        if url_lower.startswith("rtmp://"):
-            streamtype = 2
-        elif url_lower.startswith("srt://"):
-            streamtype = 3
-        elif url_lower.startswith("http://") or url_lower.startswith("https://"):
-            streamtype = 4
-
         try:
+            # First, check if this URL already exists as a configured source
+            existing_source_index = self._find_source_by_url(media_id)
+            if existing_source_index is not None:
+                # Just switch to the existing source
+                await self.coordinator.client.async_select_streamplay_source(existing_source_index)
+                await self.coordinator.async_request_refresh()
+                return
+
+            # Determine stream type from URL
+            streamtype = 1  # Default to RTSP
+            url_lower = media_id.lower()
+            if url_lower.startswith("rtmp://"):
+                streamtype = 2
+            elif url_lower.startswith("srt://"):
+                streamtype = 3
+            elif url_lower.startswith("http://") or url_lower.startswith("https://"):
+                streamtype = 4
+
             # Check if we already have a "Home Assistant" source
             ha_source_index = self._find_ha_source_index()
 

@@ -810,6 +810,41 @@ class TestMediaPlayerPlayMedia:
         assert call_args[1]["url"] == "rtsp://new.stream/live"
         assert call_args[1]["switch"] is True
 
+    async def test_play_media_switches_to_existing_url(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test play_media switches to existing source if URL already exists."""
+        from custom_components.zowietek.media_player import ZowietekMediaPlayer
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        # The default mock data has sources with URLs, let's use one of them
+        # Add a source with a specific URL we'll request
+        coordinator.data.streamplay["sources"].append(
+            {
+                "index": 7,
+                "name": "Existing Camera",
+                "url": "rtsp://existing.camera/stream",
+                "switch": 0,
+            }
+        )
+        media_player = ZowietekMediaPlayer(coordinator)
+
+        # Request the same URL that already exists
+        await media_player.async_play_media(
+            media_type="url",
+            media_id="rtsp://existing.camera/stream",
+        )
+
+        # Should just switch to the existing source, not add or modify
+        mock_zowietek_client.async_add_decoding_url.assert_not_called()
+        mock_zowietek_client.async_modify_decoding_url.assert_not_called()
+        mock_zowietek_client.async_select_streamplay_source.assert_called_once_with(7)
+
 
 class TestMediaPlayerExtraAttributes:
     """Tests for media player extra state attributes."""

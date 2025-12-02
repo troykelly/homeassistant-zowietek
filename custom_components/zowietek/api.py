@@ -31,6 +31,7 @@ STATUS_NOT_LOGGED_IN = "80003"
 STATUS_WRONG_PASSWORD = "80005"
 STATUS_INVALID_PARAMS = "00003"
 STATUS_MPP_RESTART = "10000"  # Device is restarting media processing pipeline
+STATUS_SUCCESS_ALT = "000000"  # Some endpoints return 6 zeros instead of 5
 
 
 class ZowietekClient:
@@ -200,7 +201,8 @@ class ZowietekClient:
         # Status 10000 "mpp restart..." indicates the device is restarting its
         # media processing pipeline. This is a successful operation that occurs
         # when changing encoder codecs or other settings that require a restart.
-        if status not in (STATUS_SUCCESS, STATUS_MPP_RESTART):
+        # Some endpoints return "000000" (6 zeros) instead of "00000" (5 zeros).
+        if status not in (STATUS_SUCCESS, STATUS_SUCCESS_ALT, STATUS_MPP_RESTART):
             rsp = data.get("rsp", "Unknown error")
             raise ZowietekApiError(
                 f"API returned error status {status}: {rsp}",
@@ -655,6 +657,9 @@ class ZowietekClient:
         """Set NDI name and group settings.
 
         Configures the NDI source name and optionally the group.
+        The ZowieBox API requires the complete NDI configuration to be sent,
+        so this method first retrieves the current config, merges the changes,
+        and sends the complete structure back.
 
         Args:
             name: The NDI source name (visible to NDI receivers).
@@ -664,9 +669,25 @@ class ZowietekClient:
             ZowietekAuthError: If authentication fails.
             ZowietekApiError: If the settings are invalid.
         """
-        data: dict[str, str | int] = {"machinename": name}
-        if group is not None:
-            data["groups"] = group
+        # Get current NDI config (API requires complete structure for updates)
+        current_config = await self.async_get_ndi_config()
+
+        # Build complete data structure with user's changes merged in
+        data: dict[str, str | int | dict[str, str | int]] = {
+            "switch": current_config.get("switch", 0),
+            "mode_id": current_config.get("mode_id", 1),
+            "machinename": name,
+            "groups": group if group is not None else current_config.get("groups", "Public"),
+            "multicast": current_config.get(
+                "multicast",
+                {
+                    "ttl": 1,
+                    "enable": 0,
+                    "netmask": "255.255.0.0",
+                    "netprefix": "239.255.0.0",
+                },
+            ),
+        }
 
         await self._request(
             "/video?option=setinfo",

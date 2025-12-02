@@ -40,9 +40,11 @@ ZowieTek devices expose a JSON-over-HTTP API for configuration and control:
 | Code | Meaning (summary) |
 |------|-------------------|
 | `00000` | Operation succeeded |
+| `000000` | Operation succeeded (alternate format, 6 zeros - used by some endpoints like `set_ndi_info`) |
 | `00002` | Program not ready |
 | `00003` | Required parameter missing |
 | `00004` | Product not supported for this operation |
+| `10000` | MPP restart (device is restarting media processing pipeline - treat as success) |
 | `50001+` | NDI activation / configuration problems |
 | `60001+` | Streaming URL errors (exists, invalid, protocol) |
 | `70001+` | Network / Wi-Fi / port conflicts |
@@ -502,6 +504,11 @@ Controls built-in NDI|HX encoder.
   }
 }
 ```
+
+**Important Notes:**
+- The complete data structure is required. Sending only partial fields (e.g., just `machinename`) will fail with status `00003`.
+- First retrieve the current configuration via `get_ndi_info`, then merge your changes and send the complete structure.
+- This endpoint returns status `"000000"` (6 zeros) on success instead of the typical `"00000"` (5 zeros).
 
 ### 10.4 NDI switch (simple on/off)
 

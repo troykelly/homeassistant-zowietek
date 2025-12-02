@@ -26,7 +26,10 @@ set_ndi_settings:
 
 set_rtmp_url:
   name: Set RTMP URL
-  description: Configure RTMP streaming destination URL and stream key.
+  description: >-
+    Configure RTMP streaming destination URL and stream key.
+    Requires the device to have an RTMP publish target pre-configured
+    via the device web interface.
   fields:
     device_id:
       name: Device
@@ -52,7 +55,10 @@ set_rtmp_url:
 
 set_srt_settings:
   name: Set SRT Settings
-  description: Configure SRT (Secure Reliable Transport) streaming settings.
+  description: >-
+    Configure SRT (Secure Reliable Transport) streaming settings.
+    Requires the device to have an SRT publish target pre-configured
+    via the device web interface.
   fields:
     device_id:
       name: Device

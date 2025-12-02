@@ -52,6 +52,9 @@ STEP_REAUTH_DATA_SCHEMA = vol.Schema(
     }
 )
 
+# Placeholder for password field in reconfigure flow
+PASSWORD_PLACEHOLDER = "**********"
+
 
 class ZowietekConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Zowietek."""
@@ -332,6 +335,99 @@ class ZowietekConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors["base"] = "cannot_connect"
             except Exception:
                 _LOGGER.exception("Unexpected error during reauth to %s", host)
+                errors["base"] = "unknown"
+
+        return False
+
+    async def async_step_reconfigure(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> ConfigFlowResult:
+        """Handle reconfiguration of the device.
+
+        This flow allows users to update host, username, and password
+        from the device's integration page without removing and re-adding.
+
+        Args:
+            user_input: The user input from the form, or None on first call.
+
+        Returns:
+            ConfigFlowResult with form on error or abort on success.
+        """
+        errors: dict[str, str] = {}
+        reconfigure_entry = self._get_reconfigure_entry()
+
+        if user_input is not None:
+            host = user_input[CONF_HOST]
+            username = user_input[CONF_USERNAME]
+            password = user_input[CONF_PASSWORD]
+
+            # Validate new configuration
+            valid = await self._async_validate_reconfigure(host, username, password, errors)
+
+            if valid:
+                return self.async_update_reload_and_abort(
+                    reconfigure_entry,
+                    data_updates={
+                        CONF_HOST: host,
+                        CONF_USERNAME: username,
+                        CONF_PASSWORD: password,
+                    },
+                )
+
+        # Build schema with current values pre-filled (except password)
+        current_host = reconfigure_entry.data.get(CONF_HOST, "")
+        current_username = reconfigure_entry.data.get(CONF_USERNAME, DEFAULT_USERNAME)
+
+        data_schema = vol.Schema(
+            {
+                vol.Required(CONF_HOST, default=current_host): str,
+                vol.Required(CONF_USERNAME, default=current_username): str,
+                vol.Required(CONF_PASSWORD): str,
+            }
+        )
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=data_schema,
+            errors=errors,
+        )
+
+    async def _async_validate_reconfigure(
+        self,
+        host: str,
+        username: str,
+        password: str,
+        errors: dict[str, str],
+    ) -> bool:
+        """Validate configuration for reconfigure flow.
+
+        Args:
+            host: The host/IP address of the device.
+            username: The new username.
+            password: The new password.
+            errors: Dictionary to populate with any errors.
+
+        Returns:
+            True if configuration is valid, False otherwise.
+        """
+        async with ZowietekClient(host, username, password) as client:
+            try:
+                # Test connectivity and validate credentials
+                await client.async_test_connection()
+                await client.async_validate_credentials()
+                return True
+            except ZowietekAuthError:
+                _LOGGER.debug("Reconfigure authentication failed for %s", host)
+                errors["base"] = "invalid_auth"
+            except ZowietekConnectionError:
+                _LOGGER.debug("Cannot connect to %s during reconfigure", host)
+                errors["base"] = "cannot_connect"
+            except ZowietekError as err:
+                _LOGGER.debug("API error during reconfigure to %s: %s", host, err)
+                errors["base"] = "cannot_connect"
+            except Exception:
+                _LOGGER.exception("Unexpected error during reconfigure to %s", host)
                 errors["base"] = "unknown"
 
         return False

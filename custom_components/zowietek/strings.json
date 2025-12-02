@@ -14,6 +14,18 @@
           "username": "Device username (default: admin)",
           "password": "Device password (default: admin)"
         }
+      },
+      "reauth_confirm": {
+        "title": "Reauthenticate ZowieBox",
+        "description": "The credentials for your ZowieBox device are no longer valid. Please enter the updated credentials.",
+        "data": {
+          "username": "Username",
+          "password": "Password"
+        },
+        "data_description": {
+          "username": "Device username",
+          "password": "Device password"
+        }
       }
     },
     "error": {
@@ -22,7 +34,8 @@
       "unknown": "An unexpected error occurred."
     },
     "abort": {
-      "already_configured": "This device is already configured."
+      "already_configured": "This device is already configured.",
+      "reauth_successful": "Reauthentication successful."
     }
   },
   "entity": {

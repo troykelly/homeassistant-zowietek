@@ -1203,3 +1203,314 @@ async def test_options_flow_handler_registered(
     assert hasattr(ZowietekConfigFlow, "async_get_options_flow")
     # Verify the method is callable
     assert callable(getattr(ZowietekConfigFlow, "async_get_options_flow", None))
+
+
+# =============================================================================
+# Reconfigure Flow Tests
+# =============================================================================
+
+
+async def test_reconfigure_flow_shows_form(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+) -> None:
+    """Test that reconfigure flow shows form with current values."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    existing_entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="ZBOX-ABC123",
+        title="ZowieBox-Office",
+        data={
+            CONF_HOST: "192.168.1.100",
+            CONF_USERNAME: "admin",
+            CONF_PASSWORD: "secret_password",
+        },
+    )
+    existing_entry.add_to_hass(hass)
+
+    # Start reconfigure flow
+    result = await existing_entry.start_reconfigure_flow(hass)
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "reconfigure"
+
+
+async def test_reconfigure_flow_prefills_host_and_username(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+) -> None:
+    """Test that reconfigure form has host and username pre-filled."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    existing_entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="ZBOX-ABC123",
+        title="ZowieBox-Office",
+        data={
+            CONF_HOST: "192.168.1.100",
+            CONF_USERNAME: "admin",
+            CONF_PASSWORD: "secret_password",
+        },
+    )
+    existing_entry.add_to_hass(hass)
+
+    result = await existing_entry.start_reconfigure_flow(hass)
+
+    assert result["type"] is FlowResultType.FORM
+    # Check suggested values (for reconfigure, values are in description_placeholders
+    # or suggested_values)
+    schema_keys = list(result["data_schema"].schema.keys())
+    schema_key_names = [str(k) for k in schema_keys]
+    assert CONF_HOST in schema_key_names
+    assert CONF_USERNAME in schema_key_names
+    assert CONF_PASSWORD in schema_key_names
+
+
+async def test_reconfigure_flow_success(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+) -> None:
+    """Test successful reconfigure updates entry and reloads."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    existing_entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="ZBOX-ABC123",
+        title="ZowieBox-Office",
+        data={
+            CONF_HOST: "192.168.1.100",
+            CONF_USERNAME: "admin",
+            CONF_PASSWORD: "old_password",
+        },
+    )
+    existing_entry.add_to_hass(hass)
+
+    with patch(
+        "custom_components.zowietek.config_flow.ZowietekClient",
+        autospec=True,
+    ) as mock_client_class:
+        client = mock_client_class.return_value
+        client.host = "http://192.168.1.200"
+        client.async_test_connection = AsyncMock(return_value=True)
+        client.async_validate_credentials = AsyncMock(return_value=True)
+        client.close = AsyncMock()
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=None)
+
+        result = await existing_entry.start_reconfigure_flow(hass)
+
+        assert result["type"] is FlowResultType.FORM
+
+        # Submit new configuration
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {
+                CONF_HOST: "192.168.1.200",
+                CONF_USERNAME: "newadmin",
+                CONF_PASSWORD: "new_password",
+            },
+        )
+
+        # Should abort with reconfigure_successful and update entry
+        assert result["type"] is FlowResultType.ABORT
+        assert result["reason"] == "reconfigure_successful"
+
+        # Verify all values were updated
+        assert existing_entry.data[CONF_HOST] == "192.168.1.200"
+        assert existing_entry.data[CONF_USERNAME] == "newadmin"
+        assert existing_entry.data[CONF_PASSWORD] == "new_password"
+
+
+async def test_reconfigure_flow_connection_error(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+) -> None:
+    """Test reconfigure flow shows error for connection failure."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.zowietek.exceptions import ZowietekConnectionError
+
+    existing_entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="ZBOX-ABC123",
+        title="ZowieBox-Office",
+        data={
+            CONF_HOST: "192.168.1.100",
+            CONF_USERNAME: "admin",
+            CONF_PASSWORD: "password",
+        },
+    )
+    existing_entry.add_to_hass(hass)
+
+    with patch(
+        "custom_components.zowietek.config_flow.ZowietekClient",
+        autospec=True,
+    ) as mock_client_class:
+        client = mock_client_class.return_value
+        client.async_test_connection = AsyncMock(
+            side_effect=ZowietekConnectionError("Connection refused")
+        )
+        client.close = AsyncMock()
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=None)
+
+        result = await existing_entry.start_reconfigure_flow(hass)
+
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {
+                CONF_HOST: "192.168.1.200",
+                CONF_USERNAME: "admin",
+                CONF_PASSWORD: "password",
+            },
+        )
+
+        # Should show form with connection error
+        assert result["type"] is FlowResultType.FORM
+        assert result["step_id"] == "reconfigure"
+        assert result["errors"] == {"base": "cannot_connect"}
+
+
+async def test_reconfigure_flow_auth_error(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+) -> None:
+    """Test reconfigure flow shows error for invalid credentials."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.zowietek.exceptions import ZowietekAuthError
+
+    existing_entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="ZBOX-ABC123",
+        title="ZowieBox-Office",
+        data={
+            CONF_HOST: "192.168.1.100",
+            CONF_USERNAME: "admin",
+            CONF_PASSWORD: "password",
+        },
+    )
+    existing_entry.add_to_hass(hass)
+
+    with patch(
+        "custom_components.zowietek.config_flow.ZowietekClient",
+        autospec=True,
+    ) as mock_client_class:
+        client = mock_client_class.return_value
+        client.async_test_connection = AsyncMock(return_value=True)
+        client.async_validate_credentials = AsyncMock(
+            side_effect=ZowietekAuthError("Invalid credentials")
+        )
+        client.close = AsyncMock()
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=None)
+
+        result = await existing_entry.start_reconfigure_flow(hass)
+
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {
+                CONF_HOST: "192.168.1.100",
+                CONF_USERNAME: "admin",
+                CONF_PASSWORD: "wrong_password",
+            },
+        )
+
+        # Should show form with auth error
+        assert result["type"] is FlowResultType.FORM
+        assert result["step_id"] == "reconfigure"
+        assert result["errors"] == {"base": "invalid_auth"}
+
+
+async def test_reconfigure_flow_unknown_error(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+) -> None:
+    """Test reconfigure flow handles unknown errors."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    existing_entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="ZBOX-ABC123",
+        title="ZowieBox-Office",
+        data={
+            CONF_HOST: "192.168.1.100",
+            CONF_USERNAME: "admin",
+            CONF_PASSWORD: "password",
+        },
+    )
+    existing_entry.add_to_hass(hass)
+
+    with patch(
+        "custom_components.zowietek.config_flow.ZowietekClient",
+        autospec=True,
+    ) as mock_client_class:
+        client = mock_client_class.return_value
+        client.async_test_connection = AsyncMock(side_effect=RuntimeError("Unknown error"))
+        client.close = AsyncMock()
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=None)
+
+        result = await existing_entry.start_reconfigure_flow(hass)
+
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {
+                CONF_HOST: "192.168.1.100",
+                CONF_USERNAME: "admin",
+                CONF_PASSWORD: "password",
+            },
+        )
+
+        assert result["type"] is FlowResultType.FORM
+        assert result["step_id"] == "reconfigure"
+        assert result["errors"] == {"base": "unknown"}
+
+
+async def test_reconfigure_flow_general_api_error(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+) -> None:
+    """Test reconfigure flow handles general API errors."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.zowietek.exceptions import ZowietekError
+
+    existing_entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="ZBOX-ABC123",
+        title="ZowieBox-Office",
+        data={
+            CONF_HOST: "192.168.1.100",
+            CONF_USERNAME: "admin",
+            CONF_PASSWORD: "password",
+        },
+    )
+    existing_entry.add_to_hass(hass)
+
+    with patch(
+        "custom_components.zowietek.config_flow.ZowietekClient",
+        autospec=True,
+    ) as mock_client_class:
+        client = mock_client_class.return_value
+        client.async_test_connection = AsyncMock(return_value=True)
+        client.async_validate_credentials = AsyncMock(side_effect=ZowietekError("API error"))
+        client.close = AsyncMock()
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=None)
+
+        result = await existing_entry.start_reconfigure_flow(hass)
+
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {
+                CONF_HOST: "192.168.1.100",
+                CONF_USERNAME: "admin",
+                CONF_PASSWORD: "password",
+            },
+        )
+
+        assert result["type"] is FlowResultType.FORM
+        assert result["step_id"] == "reconfigure"
+        assert result["errors"] == {"base": "cannot_connect"}

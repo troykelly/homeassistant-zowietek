@@ -30,10 +30,6 @@ class ZowietekSwitchEntityDescription(SwitchEntityDescription):  # type: ignore[
 
     Extends SwitchEntityDescription with stream_type to identify
     which streaming protocol this switch controls.
-
-    The type: ignore[override] is required because frozen dataclasses with
-    additional fields generate __replace__ methods with incompatible signatures
-    when extending other frozen dataclasses.
     """
 
     stream_type: str

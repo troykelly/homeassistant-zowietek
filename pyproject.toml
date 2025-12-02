@@ -66,6 +66,17 @@ ignore_missing_imports = true
 module = "aiohttp.*"
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+# Entity description subclasses have __replace__ signature incompatibilities
+# due to frozen dataclasses with additional fields. This is expected and safe.
+module = [
+    "custom_components.zowietek.sensor",
+    "custom_components.zowietek.binary_sensor",
+    "custom_components.zowietek.switch",
+    "custom_components.zowietek.number",
+]
+warn_unused_ignores = false
+
 [tool.ruff]
 target-version = "py313"
 line-length = 100

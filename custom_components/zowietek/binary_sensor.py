@@ -27,10 +27,6 @@ class ZowietekBinarySensorEntityDescription(BinarySensorEntityDescription):  # t
 
     Extends BinarySensorEntityDescription with sensor_type to identify
     what kind of binary state this sensor monitors.
-
-    The type: ignore[override] is required because frozen dataclasses with
-    additional fields generate __replace__ methods with incompatible signatures
-    when extending other frozen dataclasses.
     """
 
     sensor_type: str

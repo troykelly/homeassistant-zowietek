@@ -26,6 +26,20 @@
           "username": "Device username",
           "password": "Device password"
         }
+      },
+      "reconfigure": {
+        "title": "Reconfigure ZowieBox",
+        "description": "Update the connection settings for your ZowieBox device.",
+        "data": {
+          "host": "Host",
+          "username": "Username",
+          "password": "Password"
+        },
+        "data_description": {
+          "host": "Hostname, IP address, or URL of the ZowieBox device",
+          "username": "Device username",
+          "password": "Device password"
+        }
       }
     },
     "error": {
@@ -35,7 +49,8 @@
     },
     "abort": {
       "already_configured": "This device is already configured.",
-      "reauth_successful": "Reauthentication successful."
+      "reauth_successful": "Reauthentication successful.",
+      "reconfigure_successful": "Configuration updated successfully."
     }
   },
   "options": {

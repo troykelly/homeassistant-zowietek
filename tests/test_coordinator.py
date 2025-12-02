@@ -800,3 +800,307 @@ class TestZowietekCoordinatorInputSignal:
 
         # Should process the signal key
         assert coordinator.data.video.get("input_signal") == 1
+
+
+class TestZowietekCoordinatorConnectionRecovery:
+    """Tests for ZowietekCoordinator connection recovery behavior.
+
+    These tests verify that the coordinator properly handles:
+    - Temporary network failures
+    - Device reboots (extended unavailability)
+    - Automatic recovery when connection is restored
+    - Timeout errors
+    """
+
+    async def test_timeout_error_raises_update_failed(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test timeout error on required endpoint raises UpdateFailed.
+
+        Timeout errors are a type of connection error and should result
+        in UpdateFailed, marking entities as unavailable.
+        """
+        from custom_components.zowietek.exceptions import ZowietekTimeoutError
+
+        mock_config_entry.add_to_hass(hass)
+
+        # Timeout on required endpoint should raise UpdateFailed
+        mock_zowietek_client.async_get_input_signal.side_effect = ZowietekTimeoutError(
+            "Request timed out after 10 seconds"
+        )
+
+        coordinator = ZowietekCoordinator(hass, mock_config_entry)
+
+        with pytest.raises(UpdateFailed):
+            await _refresh_coordinator(coordinator)
+
+    async def test_multiple_consecutive_failures_then_recovery(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+        mock_input_signal: dict[str, str | int],
+        mock_output_info: dict[str, str | int],
+        mock_venc_info: dict[str, list[dict[str, str | int | dict[str, str | int | list[str]]]]],
+        mock_stream_publish_info: dict[str, list[dict[str, str | int]]],
+        mock_ndi_config: dict[str, str | int],
+        mock_audio_info: dict[str, str | int | dict[str, str | int | list[str]]],
+    ) -> None:
+        """Test coordinator recovers after multiple consecutive failures.
+
+        Simulates a device reboot scenario where the device is unavailable
+        for multiple polling cycles before coming back online.
+        """
+        mock_config_entry.add_to_hass(hass)
+
+        # Configure all calls to fail initially
+        mock_zowietek_client.async_get_input_signal.side_effect = ZowietekConnectionError(
+            "Connection refused"
+        )
+
+        coordinator = ZowietekCoordinator(hass, mock_config_entry)
+
+        # First failure
+        with pytest.raises(UpdateFailed):
+            await _refresh_coordinator(coordinator)
+
+        # Second failure
+        with pytest.raises(UpdateFailed):
+            await _refresh_coordinator(coordinator)
+
+        # Third failure
+        with pytest.raises(UpdateFailed):
+            await _refresh_coordinator(coordinator)
+
+        # Now restore connection - all endpoints succeed
+        mock_zowietek_client.async_get_input_signal.side_effect = None
+        mock_zowietek_client.async_get_input_signal.return_value = mock_input_signal
+        mock_zowietek_client.async_get_output_info.return_value = mock_output_info
+        mock_zowietek_client.async_get_venc_info.return_value = mock_venc_info
+        mock_zowietek_client.async_get_stream_publish_info.return_value = mock_stream_publish_info
+        mock_zowietek_client.async_get_ndi_config.return_value = mock_ndi_config
+        mock_zowietek_client.async_get_audio_info.return_value = mock_audio_info
+
+        # Recovery should succeed
+        await _refresh_coordinator(coordinator)
+
+        assert isinstance(coordinator.data, ZowietekData)
+        assert coordinator.data.video["enc_resolution"] == "1920x1080"
+
+    async def test_recovery_after_device_reboot(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+        mock_input_signal: dict[str, str | int],
+        mock_output_info: dict[str, str | int],
+        mock_venc_info: dict[str, list[dict[str, str | int | dict[str, str | int | list[str]]]]],
+        mock_stream_publish_info: dict[str, list[dict[str, str | int]]],
+        mock_ndi_config: dict[str, str | int],
+        mock_audio_info: dict[str, str | int | dict[str, str | int | list[str]]],
+    ) -> None:
+        """Test coordinator handles device reboot scenario.
+
+        During a reboot, the device may:
+        1. Close connections abruptly
+        2. Be unreachable for several seconds
+        3. Come back with all endpoints available
+
+        The coordinator should handle all phases gracefully.
+        """
+        from custom_components.zowietek.exceptions import ZowietekTimeoutError
+
+        mock_config_entry.add_to_hass(hass)
+
+        coordinator = ZowietekCoordinator(hass, mock_config_entry)
+
+        # Initial successful fetch
+        mock_zowietek_client.async_get_input_signal.return_value = mock_input_signal
+        mock_zowietek_client.async_get_output_info.return_value = mock_output_info
+        mock_zowietek_client.async_get_venc_info.return_value = mock_venc_info
+        mock_zowietek_client.async_get_stream_publish_info.return_value = mock_stream_publish_info
+        mock_zowietek_client.async_get_ndi_config.return_value = mock_ndi_config
+        mock_zowietek_client.async_get_audio_info.return_value = mock_audio_info
+
+        await _refresh_coordinator(coordinator)
+        assert isinstance(coordinator.data, ZowietekData)
+
+        # Simulate reboot - device becomes unreachable
+        mock_zowietek_client.async_get_input_signal.side_effect = ZowietekTimeoutError(
+            "Connection timed out"
+        )
+
+        with pytest.raises(UpdateFailed):
+            await _refresh_coordinator(coordinator)
+
+        # Device comes back online
+        mock_zowietek_client.async_get_input_signal.side_effect = None
+        mock_zowietek_client.async_get_input_signal.return_value = mock_input_signal
+
+        await _refresh_coordinator(coordinator)
+
+        # Should recover with fresh data
+        assert isinstance(coordinator.data, ZowietekData)
+        assert coordinator.data.video["enc_resolution"] == "1920x1080"
+
+    async def test_auth_error_on_optional_endpoint_during_recovery(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+        mock_input_signal: dict[str, str | int],
+        mock_output_info: dict[str, str | int],
+        mock_venc_info: dict[str, list[dict[str, str | int | dict[str, str | int | list[str]]]]],
+        mock_stream_publish_info: dict[str, list[dict[str, str | int]]],
+    ) -> None:
+        """Test auth error on optional endpoint triggers reauth even during recovery.
+
+        If credentials expire while the device was rebooting, the coordinator
+        should detect the auth error and trigger reauthentication.
+        """
+        mock_config_entry.add_to_hass(hass)
+
+        coordinator = ZowietekCoordinator(hass, mock_config_entry)
+
+        # Setup: device was offline, now coming back with expired credentials
+        mock_zowietek_client.async_get_input_signal.return_value = mock_input_signal
+        mock_zowietek_client.async_get_output_info.return_value = mock_output_info
+        mock_zowietek_client.async_get_venc_info.return_value = mock_venc_info
+        mock_zowietek_client.async_get_stream_publish_info.return_value = mock_stream_publish_info
+
+        # Optional endpoint returns auth error (credentials expired during reboot)
+        mock_zowietek_client.async_get_ndi_config = AsyncMock(
+            side_effect=ZowietekAuthError("Session expired")
+        )
+        mock_zowietek_client.async_get_audio_info = AsyncMock(return_value={})
+        mock_zowietek_client.async_get_sys_attr_info = AsyncMock(return_value={})
+        mock_zowietek_client.async_get_dashboard_info = AsyncMock(return_value={})
+
+        with pytest.raises(ConfigEntryAuthFailed):
+            await _refresh_coordinator(coordinator)
+
+    async def test_network_interruption_recovery(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+        mock_input_signal: dict[str, str | int],
+        mock_output_info: dict[str, str | int],
+        mock_venc_info: dict[str, list[dict[str, str | int | dict[str, str | int | list[str]]]]],
+        mock_stream_publish_info: dict[str, list[dict[str, str | int]]],
+        mock_ndi_config: dict[str, str | int],
+        mock_audio_info: dict[str, str | int | dict[str, str | int | list[str]]],
+    ) -> None:
+        """Test recovery from network interruption.
+
+        Network interruptions may cause different error types:
+        - Connection refused
+        - DNS resolution failure
+        - Connection timeout
+
+        The coordinator should handle all these and recover.
+        """
+        mock_config_entry.add_to_hass(hass)
+
+        coordinator = ZowietekCoordinator(hass, mock_config_entry)
+
+        # Configure successful initial state
+        mock_zowietek_client.async_get_input_signal.return_value = mock_input_signal
+        mock_zowietek_client.async_get_output_info.return_value = mock_output_info
+        mock_zowietek_client.async_get_venc_info.return_value = mock_venc_info
+        mock_zowietek_client.async_get_stream_publish_info.return_value = mock_stream_publish_info
+        mock_zowietek_client.async_get_ndi_config.return_value = mock_ndi_config
+        mock_zowietek_client.async_get_audio_info.return_value = mock_audio_info
+
+        await _refresh_coordinator(coordinator)
+
+        # Network interruption - different error types
+        mock_zowietek_client.async_get_input_signal.side_effect = ZowietekConnectionError(
+            "Cannot connect to host"
+        )
+
+        with pytest.raises(UpdateFailed):
+            await _refresh_coordinator(coordinator)
+
+        # Network restored
+        mock_zowietek_client.async_get_input_signal.side_effect = None
+        mock_zowietek_client.async_get_input_signal.return_value = mock_input_signal
+
+        await _refresh_coordinator(coordinator)
+
+        assert isinstance(coordinator.data, ZowietekData)
+
+    async def test_consecutive_failures_count_tracking(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+        mock_input_signal: dict[str, str | int],
+        mock_output_info: dict[str, str | int],
+        mock_venc_info: dict[str, list[dict[str, str | int | dict[str, str | int | list[str]]]]],
+        mock_stream_publish_info: dict[str, list[dict[str, str | int]]],
+        mock_ndi_config: dict[str, str | int],
+        mock_audio_info: dict[str, str | int | dict[str, str | int | list[str]]],
+    ) -> None:
+        """Test that consecutive failures are tracked for diagnostics.
+
+        The coordinator should track the number of consecutive failures
+        to help diagnose persistent connection issues.
+        """
+        mock_config_entry.add_to_hass(hass)
+
+        coordinator = ZowietekCoordinator(hass, mock_config_entry)
+
+        # All endpoints fail
+        mock_zowietek_client.async_get_input_signal.side_effect = ZowietekConnectionError(
+            "Connection failed"
+        )
+
+        # Track failures
+        for i in range(5):
+            with pytest.raises(UpdateFailed):
+                await _refresh_coordinator(coordinator)
+
+            # Verify consecutive failures count is tracked
+            assert coordinator.consecutive_failures == i + 1
+
+        # Recovery resets the counter
+        mock_zowietek_client.async_get_input_signal.side_effect = None
+        mock_zowietek_client.async_get_input_signal.return_value = mock_input_signal
+        mock_zowietek_client.async_get_output_info.return_value = mock_output_info
+        mock_zowietek_client.async_get_venc_info.return_value = mock_venc_info
+        mock_zowietek_client.async_get_stream_publish_info.return_value = mock_stream_publish_info
+        mock_zowietek_client.async_get_ndi_config.return_value = mock_ndi_config
+        mock_zowietek_client.async_get_audio_info.return_value = mock_audio_info
+
+        await _refresh_coordinator(coordinator)
+
+        assert coordinator.consecutive_failures == 0
+
+    async def test_error_message_includes_host(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test that error messages include the host for debugging.
+
+        When connection fails, the error message should include the host
+        to help identify which device is having issues.
+        """
+        mock_config_entry.add_to_hass(hass)
+
+        mock_zowietek_client.async_get_input_signal.side_effect = ZowietekConnectionError(
+            "Connection refused"
+        )
+
+        coordinator = ZowietekCoordinator(hass, mock_config_entry)
+
+        with pytest.raises(UpdateFailed) as exc_info:
+            await _refresh_coordinator(coordinator)
+
+        # Error message should include the host
+        assert "192.168.1.100" in str(exc_info.value)

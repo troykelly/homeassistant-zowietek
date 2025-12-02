@@ -917,3 +917,164 @@ The `sys_attr` group provides comprehensive device identification information.
   - `ui_first_use_flag` – UI first use indicator
 
 **Note:** This is the preferred endpoint for device identification. The `devinfo` group is NOT supported by ZowieBox devices and will return "Invalid parameters: param group not support !!!"
+
+---
+
+## 30. Device Discovery
+
+ZowieBox devices use a **proprietary UDP multicast discovery protocol** for automatic device detection on the local network.
+
+### 30.1 Discovery Protocol Overview
+
+| Parameter | Value |
+|-----------|-------|
+| Protocol | JSON over UDP multicast |
+| Multicast Address | `224.170.1.242` |
+| Port | `21007` |
+| Transport | UDP |
+| IP Version | **IPv4 only** |
+
+**Note:** The discovery protocol is IPv4-only. There is no IPv6 multicast equivalent.
+
+### 30.2 Message Types
+
+#### 30.2.1 Keepalive
+
+Devices periodically send keepalive messages to announce their presence.
+
+```json
+{
+    "opt": "keepalive",
+    "master_device_sn": "25859"
+}
+```
+
+#### 30.2.2 Discovery Request
+
+To discover devices, send a `check_devices_request` message to the multicast group.
+
+```json
+{
+    "opt": "check_devices_request",
+    "master_device_sn": "00000"
+}
+```
+
+**Note:** The `master_device_sn` can be any value (e.g., `"00000"` or `"discovery"`). It identifies the requester and is echoed back in responses.
+
+#### 30.2.3 Discovery Response
+
+Devices respond to discovery requests with their configuration details.
+
+```json
+{
+    "opt": "check_devices_result",
+    "master_device_sn": "00000",
+    "data": {
+        "ip": "10.61.22.241",
+        "web_port": 80,
+        "product_id": 2,
+        "workmode_id": 1,
+        "device_sn": "27117",
+        "device_name": "ZowieBox-27117"
+    }
+}
+```
+
+**Response Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `ip` | string | Device IP address |
+| `web_port` | integer | HTTP API port (usually 80) |
+| `product_id` | integer | Product type identifier |
+| `workmode_id` | integer | Current operating mode |
+| `device_sn` | string | Device serial number |
+| `device_name` | string | User-configured device name |
+
+### 30.3 Implementation Example
+
+```python
+import socket
+import json
+
+MULTICAST_GROUP = "224.170.1.242"
+MULTICAST_PORT = 21007
+
+def discover_devices(timeout: float = 3.0) -> list[dict]:
+    """Discover ZowieBox devices on the network."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
+    sock.settimeout(timeout)
+
+    # Join multicast group to receive responses
+    import struct
+    mreq = struct.pack("4sl", socket.inet_aton(MULTICAST_GROUP), socket.INADDR_ANY)
+    sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+
+    # Bind to receive responses
+    sock.bind(("", MULTICAST_PORT))
+
+    # Send discovery request
+    request = json.dumps({
+        "opt": "check_devices_request",
+        "master_device_sn": "00000"
+    }).encode()
+    sock.sendto(request, (MULTICAST_GROUP, MULTICAST_PORT))
+
+    # Collect responses
+    devices = []
+    while True:
+        try:
+            data, addr = sock.recvfrom(4096)
+            msg = json.loads(data.decode())
+            if msg.get("opt") == "check_devices_result":
+                devices.append(msg.get("data", {}))
+        except socket.timeout:
+            break
+
+    sock.close()
+    return devices
+```
+
+### 30.4 Standard Discovery Protocols (Not Supported)
+
+ZowieBox devices do **not** support standard discovery protocols:
+
+| Protocol | Status | Notes |
+|----------|--------|-------|
+| SSDP (UPnP) | ❌ Not Supported | Port 1900 closed |
+| mDNS/Zeroconf | ❌ Not Supported | Port 5353 closed |
+
+### 30.5 HTTP API Device Search
+
+The HTTP API also provides a device search endpoint (requires an existing device connection):
+
+- **Endpoint:** `POST /system?option=getinfo&login_check_flag=1`
+- **Body:**
+
+```json
+{"group": "device_search", "opt": "get_devices_list"}
+```
+
+- **Response:**
+
+```json
+{
+    "rsp": "succeed",
+    "status": "00000",
+    "data": [
+        {
+            "ip": "10.61.22.241",
+            "web_port": 80,
+            "device_sn": "27117",
+            "device_name": "ZowieBox-27117",
+            "workmode_id": 1,
+            "product_id": 2
+        }
+    ]
+}
+```
+
+**Note:** This endpoint requires connecting to an existing device first, so it cannot be used for initial discovery. Use the UDP multicast protocol for zero-configuration discovery.

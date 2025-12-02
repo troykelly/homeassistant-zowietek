@@ -25,6 +25,7 @@ from .const import (
     MAX_SCAN_INTERVAL,
     MIN_SCAN_INTERVAL,
 )
+from .discovery import DiscoveredDevice, async_discover_devices
 from .exceptions import (
     ZowietekAuthError,
     ZowietekConnectionError,
@@ -36,6 +37,12 @@ if TYPE_CHECKING:
     from typing import Any
 
 _LOGGER = logging.getLogger(__name__)
+
+# Discovery timeout in seconds
+DISCOVERY_TIMEOUT = 5.0
+
+# Option for manual entry in device picker
+MANUAL_ENTRY = "manual"
 
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
@@ -64,6 +71,8 @@ class ZowietekConfigFlow(ConfigFlow, domain=DOMAIN):
     def __init__(self) -> None:
         """Initialize the config flow."""
         self._reauth_entry: ConfigEntry[Any] | None = None
+        self._discovered_devices: dict[str, DiscoveredDevice] = {}
+        self._selected_device: DiscoveredDevice | None = None
 
     @staticmethod
     @callback
@@ -84,7 +93,66 @@ class ZowietekConfigFlow(ConfigFlow, domain=DOMAIN):
         self,
         user_input: dict[str, Any] | None = None,
     ) -> ConfigFlowResult:
-        """Handle the initial step.
+        """Handle the initial step - discover devices and show picker.
+
+        First attempts UDP multicast discovery to find ZowieBox devices,
+        then shows a picker to select a device or enter manually.
+        """
+        if user_input is not None:
+            # User selected a device from the picker
+            selected = user_input.get("device")
+
+            if selected == MANUAL_ENTRY:
+                # User chose manual entry - go to manual step
+                return await self.async_step_manual()
+
+            # User selected a discovered device
+            if selected in self._discovered_devices:
+                self._selected_device = self._discovered_devices[selected]
+                # Go to credentials step for the selected device
+                return await self.async_step_credentials()
+
+        # Perform device discovery
+        try:
+            _LOGGER.debug("Starting device discovery...")
+            devices = await async_discover_devices(timeout=DISCOVERY_TIMEOUT)
+            _LOGGER.debug("Discovery found %d device(s)", len(devices))
+
+            # Store discovered devices by serial number
+            self._discovered_devices = {
+                device.device_sn: device for device in devices if device.device_sn
+            }
+
+        except OSError as err:
+            _LOGGER.warning("Device discovery failed: %s", err)
+            self._discovered_devices = {}
+
+        # If no devices found, go directly to manual entry
+        if not self._discovered_devices:
+            return await self.async_step_manual()
+
+        # Build the device picker schema
+        device_options = {
+            device.device_sn: f"{device.device_name} ({device.ip})"
+            for device in self._discovered_devices.values()
+        }
+        # Add manual entry option
+        device_options[MANUAL_ENTRY] = "Enter address manually..."
+
+        return self.async_show_form(
+            step_id="user",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("device"): vol.In(device_options),
+                }
+            ),
+        )
+
+    async def async_step_manual(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> ConfigFlowResult:
+        """Handle manual device entry.
 
         This step collects host, username, and password from the user,
         validates the connection and credentials, and creates the config entry.
@@ -100,33 +168,104 @@ class ZowietekConfigFlow(ConfigFlow, domain=DOMAIN):
             device_info = await self._async_validate_input(host, username, password, errors)
 
             if not errors:
-                # Get unique_id - prefer device serial, fall back to normalized host
-                device_sn = device_info.get("devicesn", "")
-                device_name = device_info.get("devicename", "")
-                normalized_host = device_info.get("normalized_host", host)
-
-                # Use device serial if available, otherwise use normalized host
-                unique_id = device_sn if device_sn else normalized_host
-                await self.async_set_unique_id(unique_id)
-                self._abort_if_unique_id_configured()
-
-                # Use device name if available, otherwise derive from host
-                if not device_name:
-                    device_name = self._derive_name_from_host(host)
-
-                return self.async_create_entry(
-                    title=device_name,
-                    data={
-                        CONF_HOST: host,
-                        CONF_USERNAME: username,
-                        CONF_PASSWORD: password,
-                    },
+                return await self._async_create_entry_from_device_info(
+                    host, username, password, device_info
                 )
 
         return self.async_show_form(
-            step_id="user",
+            step_id="manual",
             data_schema=STEP_USER_DATA_SCHEMA,
             errors=errors,
+        )
+
+    async def async_step_credentials(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> ConfigFlowResult:
+        """Handle credentials entry for a discovered device.
+
+        This step collects username and password for a device selected
+        from the discovery picker.
+        """
+        errors: dict[str, str] = {}
+
+        if self._selected_device is None:
+            # Should not happen, but handle gracefully
+            return await self.async_step_manual()
+
+        device = self._selected_device
+
+        if user_input is not None:
+            username = user_input[CONF_USERNAME]
+            password = user_input[CONF_PASSWORD]
+            host = device.host
+
+            # Validate connection and credentials
+            device_info = await self._async_validate_input(host, username, password, errors)
+
+            if not errors:
+                # Use discovered device info for unique_id and name
+                device_info["devicesn"] = device_info.get("devicesn") or device.device_sn
+                device_info["devicename"] = device_info.get("devicename") or device.device_name
+                return await self._async_create_entry_from_device_info(
+                    host, username, password, device_info
+                )
+
+        # Show credentials form with device info in description
+        return self.async_show_form(
+            step_id="credentials",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_USERNAME, default=DEFAULT_USERNAME): str,
+                    vol.Required(CONF_PASSWORD, default=DEFAULT_PASSWORD): str,
+                }
+            ),
+            errors=errors,
+            description_placeholders={
+                "device_name": device.device_name,
+                "device_ip": device.ip,
+            },
+        )
+
+    async def _async_create_entry_from_device_info(
+        self,
+        host: str,
+        username: str,
+        password: str,
+        device_info: dict[str, Any],
+    ) -> ConfigFlowResult:
+        """Create a config entry from validated device info.
+
+        Args:
+            host: The device host/IP.
+            username: The username.
+            password: The password.
+            device_info: Device info dict with devicesn, devicename, etc.
+
+        Returns:
+            ConfigFlowResult creating the entry.
+        """
+        # Get unique_id - prefer device serial, fall back to normalized host
+        device_sn = device_info.get("devicesn", "")
+        device_name = device_info.get("devicename", "")
+        normalized_host = device_info.get("normalized_host", host)
+
+        # Use device serial if available, otherwise use normalized host
+        unique_id = device_sn if device_sn else normalized_host
+        await self.async_set_unique_id(unique_id)
+        self._abort_if_unique_id_configured()
+
+        # Use device name if available, otherwise derive from host
+        if not device_name:
+            device_name = self._derive_name_from_host(host)
+
+        return self.async_create_entry(
+            title=device_name,
+            data={
+                CONF_HOST: host,
+                CONF_USERNAME: username,
+                CONF_PASSWORD: password,
+            },
         )
 
     async def _async_validate_input(

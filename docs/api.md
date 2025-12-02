@@ -1078,3 +1078,85 @@ The HTTP API also provides a device search endpoint (requires an existing device
 ```
 
 **Note:** This endpoint requires connecting to an existing device first, so it cannot be used for initial discovery. Use the UDP multicast protocol for zero-configuration discovery.
+
+---
+
+## 31. Home Assistant Device Triggers
+
+The Zowietek integration provides device triggers that can be used in Home Assistant automations. These triggers fire events when specific device state changes occur.
+
+### 31.1 Available Trigger Types
+
+| Trigger | Event Type | Description |
+|---------|-----------|-------------|
+| `stream_started` | `zowietek_event` | Fires when any stream output (NDI, RTMP, or SRT) is enabled |
+| `stream_stopped` | `zowietek_event` | Fires when all stream outputs are disabled |
+| `video_input_detected` | `zowietek_event` | Fires when HDMI video signal is detected |
+| `video_input_lost` | `zowietek_event` | Fires when HDMI video signal is lost |
+
+### 31.2 Event Structure
+
+Events are fired on the Home Assistant event bus with the following structure:
+
+```json
+{
+    "event_type": "zowietek_event",
+    "data": {
+        "device_id": "<ha_device_id>",
+        "type": "<trigger_type>"
+    }
+}
+```
+
+### 31.3 Using Device Triggers in Automations
+
+Device triggers appear in the Home Assistant automation UI when creating device-based automations. Example YAML automation:
+
+```yaml
+automation:
+  - alias: "Notify when video input detected"
+    trigger:
+      - platform: device
+        domain: zowietek
+        device_id: <your_device_id>
+        type: video_input_detected
+    action:
+      - service: notify.mobile_app
+        data:
+          message: "Video input detected on ZowieBox"
+
+  - alias: "Log when stream starts"
+    trigger:
+      - platform: device
+        domain: zowietek
+        device_id: <your_device_id>
+        type: stream_started
+    action:
+      - service: logbook.log
+        data:
+          name: "ZowieBox"
+          message: "Started streaming"
+```
+
+### 31.4 Firing Triggers Programmatically
+
+To fire device triggers from within the integration (e.g., from the coordinator when state changes are detected), use:
+
+```python
+from homeassistant.core import HomeAssistant
+
+hass.bus.async_fire(
+    "zowietek_event",
+    {
+        "device_id": device_id,
+        "type": "stream_started",  # or other trigger type
+    }
+)
+```
+
+### 31.5 Implementation Notes
+
+- Triggers are defined in `custom_components/zowietek/device_trigger.py`
+- The `async_get_triggers` function returns available triggers for a device
+- The `async_attach_trigger` function attaches event listeners for the trigger
+- Translations for trigger types are in `strings.json` under `device_automation.trigger_type`

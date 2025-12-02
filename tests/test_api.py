@@ -1594,3 +1594,107 @@ class TestZowietekClientRebootEmptyResponse:
         await client.async_reboot()
 
         mock_session.post.assert_called_once()
+
+
+class TestZowietekClientAudioVolumeSetter:
+    """Tests for ZowietekClient audio volume setter."""
+
+    @pytest.mark.asyncio
+    async def test_async_set_audio_volume_success(self) -> None:
+        """Test successful audio volume setting."""
+        mock_response = _create_mock_response(
+            {
+                "status": STATUS_SUCCESS,
+                "rsp": "succeed",
+            }
+        )
+        mock_session = _create_mock_session(mock_response)
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
+
+        await client.async_set_audio_volume(75)
+
+        call_args = mock_session.post.call_args
+        json_data = call_args[1]["json"]
+        assert json_data["group"] == "audio"
+        assert json_data["volume"] == 75
+        assert json_data["user"] == "admin"
+
+    @pytest.mark.asyncio
+    async def test_async_set_audio_volume_auth_failure(self) -> None:
+        """Test audio volume setting with auth failure."""
+        mock_response = _create_mock_response(
+            {
+                "status": STATUS_NOT_LOGGED_IN,
+                "rsp": "failed",
+            }
+        )
+        mock_session = _create_mock_session(mock_response)
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="wrong",
+            session=mock_session,
+        )
+
+        with pytest.raises(ZowietekAuthError):
+            await client.async_set_audio_volume(50)
+
+
+class TestZowietekClientEncoderBitrateSetter:
+    """Tests for ZowietekClient encoder bitrate setter."""
+
+    @pytest.mark.asyncio
+    async def test_async_set_encoder_bitrate_success(self) -> None:
+        """Test successful encoder bitrate setting."""
+        mock_response = _create_mock_response(
+            {
+                "status": STATUS_SUCCESS,
+                "rsp": "succeed",
+            }
+        )
+        mock_session = _create_mock_session(mock_response)
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
+
+        await client.async_set_encoder_bitrate(12000000)
+
+        call_args = mock_session.post.call_args
+        json_data = call_args[1]["json"]
+        assert json_data["group"] == "venc"
+        assert json_data["venc"][0]["bitrate"] == 12000000
+        assert json_data["venc"][0]["venc_chnid"] == 0
+        assert json_data["venc"][0]["desc"] == "main"
+        assert json_data["user"] == "admin"
+
+    @pytest.mark.asyncio
+    async def test_async_set_encoder_bitrate_auth_failure(self) -> None:
+        """Test encoder bitrate setting with auth failure."""
+        mock_response = _create_mock_response(
+            {
+                "status": STATUS_NOT_LOGGED_IN,
+                "rsp": "failed",
+            }
+        )
+        mock_session = _create_mock_session(mock_response)
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="wrong",
+            session=mock_session,
+        )
+
+        with pytest.raises(ZowietekAuthError):
+            await client.async_set_encoder_bitrate(8000000)

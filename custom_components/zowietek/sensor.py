@@ -28,10 +28,6 @@ class ZowietekSensorEntityDescription(SensorEntityDescription):  # type: ignore[
 
     Extends SensorEntityDescription with a value_key to extract
     the sensor value from coordinator data.
-
-    The type: ignore[override] is required because frozen dataclasses with
-    additional fields generate __replace__ methods with incompatible signatures
-    when extending other frozen dataclasses.
     """
 
     value_key: str

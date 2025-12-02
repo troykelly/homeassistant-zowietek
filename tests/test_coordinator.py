@@ -1104,3 +1104,55 @@ class TestZowietekCoordinatorConnectionRecovery:
 
         # Error message should include the host
         assert "192.168.1.100" in str(exc_info.value)
+
+    async def test_api_error_consecutive_failures_debug_logging(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+        mock_input_signal: dict[str, str | int],
+        mock_output_info: dict[str, str | int],
+        mock_venc_info: dict[str, list[dict[str, str | int | dict[str, str | int | list[str]]]]],
+        mock_stream_publish_info: dict[str, list[dict[str, str | int]]],
+        mock_ndi_config: dict[str, str | int],
+        mock_audio_info: dict[str, str | int | dict[str, str | int | list[str]]],
+    ) -> None:
+        """Test that consecutive API errors use debug logging after first warning.
+
+        This ensures the ZowietekApiError path (not just ZowietekConnectionError)
+        uses debug logging for subsequent failures to avoid log spam.
+        """
+        mock_config_entry.add_to_hass(hass)
+
+        coordinator = ZowietekCoordinator(hass, mock_config_entry)
+
+        # First call succeeds
+        mock_zowietek_client.async_get_input_signal.return_value = mock_input_signal
+        mock_zowietek_client.async_get_output_info.return_value = mock_output_info
+        mock_zowietek_client.async_get_venc_info.return_value = mock_venc_info
+        mock_zowietek_client.async_get_stream_publish_info.return_value = mock_stream_publish_info
+        mock_zowietek_client.async_get_ndi_config.return_value = mock_ndi_config
+        mock_zowietek_client.async_get_audio_info.return_value = mock_audio_info
+
+        await _refresh_coordinator(coordinator)
+        assert coordinator.consecutive_failures == 0
+
+        # Now API errors occur (not connection errors) - uses ZowietekApiError catch
+        mock_zowietek_client.async_get_input_signal.side_effect = ZowietekApiError(
+            "API returned error"
+        )
+
+        # First API error - should log warning
+        with pytest.raises(UpdateFailed):
+            await _refresh_coordinator(coordinator)
+        assert coordinator.consecutive_failures == 1
+
+        # Second API error - should log debug (covers the else branch on line 406)
+        with pytest.raises(UpdateFailed):
+            await _refresh_coordinator(coordinator)
+        assert coordinator.consecutive_failures == 2
+
+        # Third API error - still debug logging
+        with pytest.raises(UpdateFailed):
+            await _refresh_coordinator(coordinator)
+        assert coordinator.consecutive_failures == 3

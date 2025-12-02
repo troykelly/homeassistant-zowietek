@@ -33,7 +33,7 @@ This is a **VIOLATION**. Every commit, every PR, every change must reference an 
 5. Commit with issue reference: `type(scope): message (#N)`
 6. Create PR with `Fixes #N` in body
 
-See skill: `ha-zowietek-github`
+See skill: `issue-driven-development:issue-lifecycle`
 
 ## Mandatory Development Rules
 
@@ -71,7 +71,7 @@ RED → GREEN → REFACTOR
 - Refactor while keeping tests green
 - No exceptions for "simple" code
 
-See skill: `ha-zowietek-tdd`
+See skill: `issue-driven-development:tdd-full-coverage`
 
 ### 4. No `Any` Type
 
@@ -83,7 +83,7 @@ See skill: `ha-zowietek-tdd`
 - Use Generics for containers
 - The only exception: `**kwargs: Any` when overriding HA base class methods that require it
 
-See skill: `ha-zowietek-typing`
+See skill: `issue-driven-development:strict-typing`
 
 ### 5. Two Failures = Research
 
@@ -94,7 +94,7 @@ See skill: `ha-zowietek-typing`
 - Examine working implementations in HA core
 - Understand before attempting again
 
-See skill: `ha-zowietek-research`
+See skill: `issue-driven-development:research-after-failure`
 
 ### 6. Mandatory Live Device Testing
 
@@ -123,7 +123,7 @@ Unit tests with mocks are necessary but NOT sufficient. Before any code is consi
 
 **Live testing is NOT optional.** The experience with issue #8 proved that mocked tests can pass while real device behavior is completely different.
 
-See skill: `ha-zowietek-live-testing`
+See skill: `issue-driven-development:acceptance-criteria-verification`
 
 ### 7. Never Leak Sensitive Information
 
@@ -369,21 +369,31 @@ def mock_config_entry() -> MockConfigEntry:
 
 ## Skills Reference
 
-This project uses specialized skills for consistent, high-quality development. Skills are located in `.claude/skills/`.
+This project uses the community-managed `issue-driven-development` skills plugin for consistent, high-quality development.
 
 ### Skill Usage Matrix
 
 | Situation | Required Skill | When to Use |
 |-----------|----------------|-------------|
-| Starting work session | `ha-zowietek-issue-selector` | Select next issue from project board |
-| Bug needs investigation | `ha-zowietek-bug-triage` | Reproduce, gather evidence, update issue |
-| Implementing fix/feature | `ha-zowietek-issue-executor` | TDD implementation linked to issue |
-| GitHub operations | `ha-zowietek-github` | Issue/PR management, commit format |
-| Writing ANY code | `ha-zowietek-tdd` | Automatic with issue-executor |
-| Type annotations | `ha-zowietek-typing` | Automatic with issue-executor |
-| Failed twice | `ha-zowietek-research` | Stop and research before continuing |
-| HA patterns | `ha-zowietek-integration` | Reference for HA best practices |
-| Before marking complete | `ha-zowietek-live-testing` | Validate against real devices and HA |
+| Starting work session | `issue-driven-development:session-start` | Establish context, check project state |
+| Receiving new work | `issue-driven-development:work-intake` | Triage scope and route to appropriate planning |
+| Before ANY work | `issue-driven-development:issue-prerequisite` | Ensure GitHub issue exists |
+| Bug needs investigation | `issue-driven-development:pre-work-research` | Research before implementation |
+| Implementing fix/feature | `issue-driven-development:issue-driven-development` | Master 13-step coding process |
+| GitHub operations | `issue-driven-development:issue-lifecycle` | Continuous issue updates |
+| Committing code | `issue-driven-development:clean-commits` | Atomic, descriptive commits |
+| Creating PRs | `issue-driven-development:pr-creation` | Complete PR documentation |
+| Writing ANY code | `issue-driven-development:tdd-full-coverage` | RED-GREEN-REFACTOR cycle |
+| Type annotations | `issue-driven-development:strict-typing` | Full typing, no `any` escapes |
+| Failed twice | `issue-driven-development:research-after-failure` | Stop guessing, research first |
+| Code review | `issue-driven-development:comprehensive-review` | 7-criteria code review |
+| Applying review findings | `issue-driven-development:apply-all-findings` | Implement ALL recommendations |
+| Verifying acceptance criteria | `issue-driven-development:acceptance-criteria-verification` | Structured testing per criterion |
+| Before merging | `issue-driven-development:verification-before-merge` | Final gate for merge readiness |
+| CI failures | `issue-driven-development:ci-monitoring` | Monitor and resolve CI issues |
+| Branch management | `issue-driven-development:branch-discipline` | Never work on main branch |
+| Writing code/docs | `issue-driven-development:inclusive-language` | Accessible, respectful terminology |
+| Inline documentation | `issue-driven-development:inline-documentation` | Complete JSDoc/docstrings |
 
 ## Device Capabilities
 

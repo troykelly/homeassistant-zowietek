@@ -964,3 +964,242 @@ async def test_reauth_flow_general_api_error(
         assert result["type"] is FlowResultType.FORM
         assert result["step_id"] == "reauth_confirm"
         assert result["errors"] == {"base": "cannot_connect"}
+
+
+# =============================================================================
+# Options Flow Tests
+# =============================================================================
+
+
+async def test_options_flow_init_form_shown(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+) -> None:
+    """Test that options flow shows form on init."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="ZBOX-ABC123",
+        title="ZowieBox-Office",
+        data={
+            CONF_HOST: "192.168.1.100",
+            CONF_USERNAME: "admin",
+            CONF_PASSWORD: "admin",
+        },
+    )
+    entry.add_to_hass(hass)
+
+    # Initialize options flow
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "init"
+
+
+async def test_options_flow_has_scan_interval_field(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+) -> None:
+    """Test that options flow form has scan_interval field."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.zowietek.const import CONF_SCAN_INTERVAL
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="ZBOX-ABC123",
+        title="ZowieBox-Office",
+        data={
+            CONF_HOST: "192.168.1.100",
+            CONF_USERNAME: "admin",
+            CONF_PASSWORD: "admin",
+        },
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+
+    assert result["type"] is FlowResultType.FORM
+    # Verify schema includes scan_interval field
+    schema_keys = list(result["data_schema"].schema.keys())
+    schema_key_names = [str(k) for k in schema_keys]
+    assert CONF_SCAN_INTERVAL in schema_key_names
+
+
+async def test_options_flow_default_scan_interval(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+) -> None:
+    """Test that options flow shows default scan_interval value."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.zowietek.const import DEFAULT_SCAN_INTERVAL
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="ZBOX-ABC123",
+        title="ZowieBox-Office",
+        data={
+            CONF_HOST: "192.168.1.100",
+            CONF_USERNAME: "admin",
+            CONF_PASSWORD: "admin",
+        },
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+
+    assert result["type"] is FlowResultType.FORM
+    # The default value should be shown in the form
+    # Schema should have default value of DEFAULT_SCAN_INTERVAL
+    schema = result["data_schema"]
+    # Get the default value from schema
+    for key in schema.schema:
+        if hasattr(key, "default"):
+            default_val = key.default()
+            assert default_val == DEFAULT_SCAN_INTERVAL
+            break
+
+
+async def test_options_flow_saves_scan_interval(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+) -> None:
+    """Test that options flow saves scan_interval to entry.options."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.zowietek.const import CONF_SCAN_INTERVAL
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="ZBOX-ABC123",
+        title="ZowieBox-Office",
+        data={
+            CONF_HOST: "192.168.1.100",
+            CONF_USERNAME: "admin",
+            CONF_PASSWORD: "admin",
+        },
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={CONF_SCAN_INTERVAL: 60},
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options[CONF_SCAN_INTERVAL] == 60
+
+
+async def test_options_flow_preserves_existing_options(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+) -> None:
+    """Test that options flow uses existing option values as defaults."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.zowietek.const import CONF_SCAN_INTERVAL
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="ZBOX-ABC123",
+        title="ZowieBox-Office",
+        data={
+            CONF_HOST: "192.168.1.100",
+            CONF_USERNAME: "admin",
+            CONF_PASSWORD: "admin",
+        },
+        options={CONF_SCAN_INTERVAL: 120},
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+
+    assert result["type"] is FlowResultType.FORM
+    # The existing value should be suggested
+    suggested_values = result.get("data_schema").schema
+    # Find the key and check its default
+    for key in suggested_values:
+        if str(key) == CONF_SCAN_INTERVAL and hasattr(key, "default") and callable(key.default):
+            # The default should be the existing option value
+            assert key.default() == 120
+
+
+async def test_options_flow_min_scan_interval(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+) -> None:
+    """Test that options flow accepts minimum scan_interval of 10 seconds."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.zowietek.const import CONF_SCAN_INTERVAL
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="ZBOX-ABC123",
+        title="ZowieBox-Office",
+        data={
+            CONF_HOST: "192.168.1.100",
+            CONF_USERNAME: "admin",
+            CONF_PASSWORD: "admin",
+        },
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={CONF_SCAN_INTERVAL: 10},
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options[CONF_SCAN_INTERVAL] == 10
+
+
+async def test_options_flow_max_scan_interval(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+) -> None:
+    """Test that options flow accepts maximum scan_interval of 300 seconds."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.zowietek.const import CONF_SCAN_INTERVAL
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="ZBOX-ABC123",
+        title="ZowieBox-Office",
+        data={
+            CONF_HOST: "192.168.1.100",
+            CONF_USERNAME: "admin",
+            CONF_PASSWORD: "admin",
+        },
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={CONF_SCAN_INTERVAL: 300},
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options[CONF_SCAN_INTERVAL] == 300
+
+
+async def test_options_flow_handler_registered(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+) -> None:
+    """Test that ZowietekConfigFlow has options flow handler registered."""
+    from custom_components.zowietek.config_flow import ZowietekConfigFlow
+
+    # Verify async_get_options_flow is defined
+    assert hasattr(ZowietekConfigFlow, "async_get_options_flow")
+    # Verify the method is callable
+    assert callable(getattr(ZowietekConfigFlow, "async_get_options_flow", None))

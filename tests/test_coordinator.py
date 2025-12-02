@@ -1156,3 +1156,80 @@ class TestZowietekCoordinatorConnectionRecovery:
         with pytest.raises(UpdateFailed):
             await _refresh_coordinator(coordinator)
         assert coordinator.consecutive_failures == 3
+
+    async def test_coordinator_uses_default_scan_interval(
+        self,
+        hass: HomeAssistant,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test coordinator uses DEFAULT_SCAN_INTERVAL when no options set."""
+        from custom_components.zowietek.const import DEFAULT_SCAN_INTERVAL
+
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            title="Test ZowieBox",
+            data={
+                CONF_HOST: "192.168.1.100",
+                CONF_USERNAME: "admin",
+                CONF_PASSWORD: "admin",
+            },
+            unique_id="zowiebox-test-12345",
+        )
+        entry.add_to_hass(hass)
+
+        coordinator = ZowietekCoordinator(hass, entry)
+
+        # Should use default scan interval
+        assert coordinator.update_interval == timedelta(seconds=DEFAULT_SCAN_INTERVAL)
+
+    async def test_coordinator_uses_options_scan_interval(
+        self,
+        hass: HomeAssistant,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test coordinator uses scan_interval from entry.options when set."""
+        from custom_components.zowietek.const import CONF_SCAN_INTERVAL
+
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            title="Test ZowieBox",
+            data={
+                CONF_HOST: "192.168.1.100",
+                CONF_USERNAME: "admin",
+                CONF_PASSWORD: "admin",
+            },
+            options={CONF_SCAN_INTERVAL: 60},
+            unique_id="zowiebox-test-12345",
+        )
+        entry.add_to_hass(hass)
+
+        coordinator = ZowietekCoordinator(hass, entry)
+
+        # Should use the options scan interval
+        assert coordinator.update_interval == timedelta(seconds=60)
+
+    async def test_coordinator_uses_custom_options_scan_interval(
+        self,
+        hass: HomeAssistant,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test coordinator uses custom scan_interval value from options."""
+        from custom_components.zowietek.const import CONF_SCAN_INTERVAL
+
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            title="Test ZowieBox",
+            data={
+                CONF_HOST: "192.168.1.100",
+                CONF_USERNAME: "admin",
+                CONF_PASSWORD: "admin",
+            },
+            options={CONF_SCAN_INTERVAL: 120},
+            unique_id="zowiebox-test-12345",
+        )
+        entry.add_to_hass(hass)
+
+        coordinator = ZowietekCoordinator(hass, entry)
+
+        # Should use 120 second interval
+        assert coordinator.update_interval == timedelta(seconds=120)

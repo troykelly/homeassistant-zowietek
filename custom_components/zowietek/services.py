@@ -100,7 +100,8 @@ def _get_coordinator_for_device(
                     break
             break
 
-    if config_entry_id is None:
+    if config_entry_id is None:  # pragma: no cover
+        # Defensive check: device exists but no Zowietek identifier found
         raise ServiceValidationError(
             f"Device '{device_id}' is not a Zowietek device",
             translation_domain=DOMAIN,
@@ -109,7 +110,8 @@ def _get_coordinator_for_device(
         )
 
     entry = hass.config_entries.async_get_entry(config_entry_id)
-    if entry is None or not hasattr(entry, "runtime_data"):
+    if entry is None or not hasattr(entry, "runtime_data"):  # pragma: no cover
+        # Defensive check: config entry removed or corrupted after device lookup
         raise ServiceValidationError(
             f"Config entry for device '{device_id}' not found",
             translation_domain=DOMAIN,

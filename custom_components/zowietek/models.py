@@ -98,22 +98,6 @@ class ZowietekNetworkInfo(TypedDict):
     mac_address: NotRequired[str]
 
 
-class ZowietekDeviceInfo(TypedDict):
-    """Device information from async_get_device_info API.
-
-    Contains device identification and version information as returned
-    by the actual ZowieBox API endpoint.
-    """
-
-    status: NotRequired[str]
-    rsp: NotRequired[str]
-    devicesn: NotRequired[str]
-    devicename: NotRequired[str]
-    softver: NotRequired[str]
-    hardver: NotRequired[str]
-    mac: NotRequired[str]
-
-
 class ZowietekVideoData(TypedDict):
     """Video information from async_get_video_info API.
 

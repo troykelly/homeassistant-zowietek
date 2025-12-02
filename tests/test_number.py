@@ -229,7 +229,6 @@ def mock_zowietek_client(
         "custom_components.zowietek.coordinator.ZowietekClient", autospec=True
     ) as mock_client_class:
         client = mock_client_class.return_value
-        client.async_get_device_info = AsyncMock(return_value=mock_device_info)
         client.async_get_video_info = AsyncMock(return_value=mock_video_info)
         client.async_get_input_signal = AsyncMock(return_value=mock_input_signal)
         client.async_get_output_info = AsyncMock(return_value=mock_output_info)

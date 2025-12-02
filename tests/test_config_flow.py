@@ -39,11 +39,12 @@ def mock_client_success() -> Generator[MagicMock]:
         client.host = "http://192.168.1.100"
         client.async_test_connection = AsyncMock(return_value=True)
         client.async_validate_credentials = AsyncMock(return_value=True)
-        client.async_get_device_info = AsyncMock(
+        # Use async_get_sys_attr_info instead of async_get_device_info (#49)
+        client.async_get_sys_attr_info = AsyncMock(
             return_value={
-                "devicesn": "ZBOX-ABC123",
-                "devicename": "ZowieBox-Office",
-                "softver": "1.2.3",
+                "SN": "ZBOX-ABC123",
+                "device_name": "ZowieBox-Office",
+                "firmware_version": "1.2.3",
             }
         )
         client.close = AsyncMock()
@@ -376,8 +377,8 @@ async def test_config_flow_device_info_fallback(
         client.host = "http://192.168.1.100"
         client.async_test_connection = AsyncMock(return_value=True)
         client.async_validate_credentials = AsyncMock(return_value=True)
-        # Device info endpoint not supported - should fall back gracefully
-        client.async_get_device_info = AsyncMock(
+        # Sys attr endpoint not supported - should fall back gracefully (#49)
+        client.async_get_sys_attr_info = AsyncMock(
             side_effect=ZowietekApiError("Invalid parameters", "00003")
         )
         client.close = AsyncMock()
@@ -404,11 +405,11 @@ async def test_config_flow_device_info_fallback(
         assert result["result"].unique_id == "http://192.168.1.100"
 
 
-async def test_config_flow_device_info_fallback_with_hostname(
+async def test_config_flow_sys_attr_fallback_with_hostname(
     hass: HomeAssistant,
     mock_setup_entry: AsyncMock,
 ) -> None:
-    """Test config flow derives name from hostname when device info unavailable."""
+    """Test config flow derives name from hostname when sys attr unavailable."""
     from custom_components.zowietek.exceptions import ZowietekApiError
 
     with patch(
@@ -419,7 +420,8 @@ async def test_config_flow_device_info_fallback_with_hostname(
         client.host = "http://zow001.example.com"
         client.async_test_connection = AsyncMock(return_value=True)
         client.async_validate_credentials = AsyncMock(return_value=True)
-        client.async_get_device_info = AsyncMock(
+        # Sys attr endpoint not supported - should fall back gracefully (#49)
+        client.async_get_sys_attr_info = AsyncMock(
             side_effect=ZowietekApiError("Invalid parameters", "00003")
         )
         client.close = AsyncMock()
@@ -495,8 +497,8 @@ async def test_config_flow_host_with_scheme_and_port(
         client.host = "http://192.168.1.100:8080"
         client.async_test_connection = AsyncMock(return_value=True)
         client.async_validate_credentials = AsyncMock(return_value=True)
-        # Device info unavailable - tests _derive_name_from_host
-        client.async_get_device_info = AsyncMock(
+        # Sys attr unavailable - tests _derive_name_from_host (#49)
+        client.async_get_sys_attr_info = AsyncMock(
             side_effect=ZowietekApiError("Invalid parameters", "00003")
         )
         client.close = AsyncMock()
@@ -537,8 +539,8 @@ async def test_config_flow_host_with_port_and_subdomain(
         client.host = "http://zow001.local:8080"
         client.async_test_connection = AsyncMock(return_value=True)
         client.async_validate_credentials = AsyncMock(return_value=True)
-        # Device info unavailable - tests _derive_name_from_host
-        client.async_get_device_info = AsyncMock(
+        # Sys attr unavailable - tests _derive_name_from_host (#49)
+        client.async_get_sys_attr_info = AsyncMock(
             side_effect=ZowietekApiError("Invalid parameters", "00003")
         )
         client.close = AsyncMock()
@@ -580,8 +582,8 @@ async def test_config_flow_empty_hostname_fallback(
         client.host = "http://....:8080"
         client.async_test_connection = AsyncMock(return_value=True)
         client.async_validate_credentials = AsyncMock(return_value=True)
-        # Device info unavailable - tests _derive_name_from_host fallback
-        client.async_get_device_info = AsyncMock(
+        # Sys attr unavailable - tests _derive_name_from_host fallback (#49)
+        client.async_get_sys_attr_info = AsyncMock(
             side_effect=ZowietekApiError("Invalid parameters", "00003")
         )
         client.close = AsyncMock()

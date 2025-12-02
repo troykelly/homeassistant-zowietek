@@ -352,66 +352,6 @@ class TestZowietekClientSystemTime:
         assert result["time"]["year"] == 2025
 
 
-class TestZowietekClientDeviceInfo:
-    """Tests for ZowietekClient device info endpoint."""
-
-    @pytest.mark.asyncio
-    async def test_async_get_device_info_success(self) -> None:
-        """Test successful device info retrieval."""
-        mock_response = _create_mock_response(
-            {
-                "status": STATUS_SUCCESS,
-                "rsp": "succeed",
-                "data": {
-                    "devicesn": "ZBOX-ABC123",
-                    "devicename": "ZowieBox-Office",
-                    "softver": "1.2.3",
-                    "hardver": "2.0",
-                    "mac": "00:11:22:33:44:55",
-                },
-            }
-        )
-        mock_session = _create_mock_session(mock_response)
-
-        client = ZowietekClient(
-            host="192.168.1.100",
-            username="admin",
-            password="admin",
-            session=mock_session,
-        )
-
-        result = await client.async_get_device_info()
-
-        assert result["devicesn"] == "ZBOX-ABC123"
-        assert result["devicename"] == "ZowieBox-Office"
-        assert result["softver"] == "1.2.3"
-
-    @pytest.mark.asyncio
-    async def test_async_get_device_info_fallback_without_data_key(self) -> None:
-        """Test device info retrieval when data key is missing (returns full response)."""
-        mock_response = _create_mock_response(
-            {
-                "status": STATUS_SUCCESS,
-                "rsp": "succeed",
-                "devicesn": "ZBOX-ABC123",  # Data at root level, no "data" key
-            }
-        )
-        mock_session = _create_mock_session(mock_response)
-
-        client = ZowietekClient(
-            host="192.168.1.100",
-            username="admin",
-            password="admin",
-            session=mock_session,
-        )
-
-        result = await client.async_get_device_info()
-
-        # Falls back to returning the full response when "data" key is missing
-        assert result["status"] == STATUS_SUCCESS
-        assert result["devicesn"] == "ZBOX-ABC123"
-
-
 class TestZowietekClientVideoInfo:
     """Tests for ZowietekClient video info endpoint."""
 

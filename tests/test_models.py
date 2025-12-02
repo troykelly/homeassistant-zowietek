@@ -364,6 +364,9 @@ class TestZowietekData:
             "state": 0,
         }
         ndi_sources: list[dict[str, str | int]] = []
+        run_status: dict[str, int] = {
+            "status": 1,
+        }
 
         data = ZowietekData(
             system=system,
@@ -375,6 +378,7 @@ class TestZowietekData:
             streamplay=streamplay,
             decoder_status=decoder_status,
             ndi_sources=ndi_sources,
+            run_status=run_status,
         )
 
         assert data.system["device_name"] == "ZowieBox-Test"
@@ -386,6 +390,7 @@ class TestZowietekData:
         assert data.streamplay["sources"] == []
         assert data.decoder_status["state"] == 0
         assert data.ndi_sources == []
+        assert data.run_status["status"] == 1
 
     def test_zowietek_data_fields_have_correct_types(self) -> None:
         """Test that ZowietekData fields have the correct type annotations.

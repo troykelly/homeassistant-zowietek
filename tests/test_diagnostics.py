@@ -70,6 +70,9 @@ def mock_coordinator_data() -> ZowietekData:
             "state": 0,
         },
         ndi_sources=[],
+        run_status={
+            "status": 1,
+        },
     )
 
 

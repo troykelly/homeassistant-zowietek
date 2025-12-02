@@ -325,6 +325,7 @@ class ZowietekCoordinator(DataUpdateCoordinator[ZowietekData]):
                 streamplay_info,
                 decoder_status,
                 ndi_sources,
+                run_status,
             ) = await asyncio.gather(
                 self.client.async_get_input_signal(),
                 self.client.async_get_output_info(),
@@ -357,6 +358,10 @@ class ZowietekCoordinator(DataUpdateCoordinator[ZowietekData]):
                 self._async_fetch_optional(
                     "ndi_sources",
                     self.client.async_get_ndi_sources(),
+                ),
+                self._async_fetch_optional(
+                    "run_status",
+                    self.client.async_get_run_status(),
                 ),
             )
 
@@ -523,6 +528,15 @@ class ZowietekCoordinator(DataUpdateCoordinator[ZowietekData]):
                 if isinstance(sources, list):
                     ndi_sources_list = sources
 
+            # Build run status data (power state: running vs standby)
+            run_status_data: dict[str, int] = {}
+            if run_status:
+                # run_status: 0 = standby, 1 = running
+                run_status_data["status"] = run_status.get("run_status", 1)
+            else:
+                # Default to running if status unavailable
+                run_status_data["status"] = 1
+
             result = ZowietekData(
                 system=system_data,
                 video=video_data,
@@ -533,6 +547,7 @@ class ZowietekCoordinator(DataUpdateCoordinator[ZowietekData]):
                 streamplay=streamplay_data,
                 decoder_status=decoder_status_data,
                 ndi_sources=ndi_sources_list,
+                run_status=run_status_data,
             )
 
             # Check for state changes and fire device trigger events

@@ -1910,3 +1910,159 @@ class TestZowietekClientSetSrtSettings:
         assert json_data["data"]["port"] == 9000
         assert json_data["data"]["latency"] == 120
         assert json_data["data"]["passphrase"] == "secretkey"
+
+
+class TestZowietekClientPowerControl:
+    """Tests for ZowietekClient power control methods (standby/wake)."""
+
+    @pytest.mark.asyncio
+    async def test_async_get_run_status_running(self) -> None:
+        """Test getting run status when device is running."""
+        mock_response = _create_mock_response(
+            {
+                "status": STATUS_SUCCESS,
+                "rsp": "succeed",
+                "data": {"run_status": 1},
+            }
+        )
+        mock_session = _create_mock_session(mock_response)
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
+
+        result = await client.async_get_run_status()
+
+        assert result["run_status"] == 1
+        mock_session.post.assert_called_once()
+        call_args = mock_session.post.call_args
+        assert "/system?option=getinfo" in call_args[0][0]
+        json_data = call_args[1]["json"]
+        assert json_data["group"] == "syscontrol"
+        assert json_data["opt"] == "get_run_status"
+
+    @pytest.mark.asyncio
+    async def test_async_get_run_status_standby(self) -> None:
+        """Test getting run status when device is in standby."""
+        mock_response = _create_mock_response(
+            {
+                "status": STATUS_SUCCESS,
+                "rsp": "succeed",
+                "data": {"run_status": 0},
+            }
+        )
+        mock_session = _create_mock_session(mock_response)
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
+
+        result = await client.async_get_run_status()
+
+        assert result["run_status"] == 0
+
+    @pytest.mark.asyncio
+    async def test_async_power_off(self) -> None:
+        """Test putting device into standby mode."""
+        mock_response = _create_mock_response(
+            {
+                "status": STATUS_SUCCESS,
+                "rsp": "succeed",
+            }
+        )
+        mock_session = _create_mock_session(mock_response)
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
+
+        await client.async_power_off()
+
+        mock_session.post.assert_called_once()
+        call_args = mock_session.post.call_args
+        assert "/system?option=setinfo" in call_args[0][0]
+        json_data = call_args[1]["json"]
+        assert json_data["group"] == "syscontrol"
+        assert json_data["opt"] == "power_off"
+        assert json_data["user"] == "admin"
+        assert json_data["psw"] == "admin"
+
+    @pytest.mark.asyncio
+    async def test_async_power_on(self) -> None:
+        """Test waking device from standby mode."""
+        mock_response = _create_mock_response(
+            {
+                "status": STATUS_SUCCESS,
+                "rsp": "succeed",
+            }
+        )
+        mock_session = _create_mock_session(mock_response)
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
+
+        await client.async_power_on()
+
+        mock_session.post.assert_called_once()
+        call_args = mock_session.post.call_args
+        assert "/system?option=setinfo" in call_args[0][0]
+        json_data = call_args[1]["json"]
+        assert json_data["group"] == "syscontrol"
+        assert json_data["opt"] == "power_on"
+        assert json_data["user"] == "admin"
+        assert json_data["psw"] == "admin"
+
+    @pytest.mark.asyncio
+    async def test_async_power_off_auth_error(self) -> None:
+        """Test power_off raises auth error when not authenticated."""
+        mock_response = _create_mock_response(
+            {
+                "status": STATUS_NOT_LOGGED_IN,
+                "rsp": "Authentication required",
+            }
+        )
+        mock_session = _create_mock_session(mock_response)
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="wrong",
+            session=mock_session,
+        )
+
+        with pytest.raises(ZowietekAuthError):
+            await client.async_power_off()
+
+    @pytest.mark.asyncio
+    async def test_async_power_on_auth_error(self) -> None:
+        """Test power_on raises auth error when not authenticated."""
+        mock_response = _create_mock_response(
+            {
+                "status": STATUS_WRONG_PASSWORD,
+                "rsp": "Wrong password",
+            }
+        )
+        mock_session = _create_mock_session(mock_response)
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="wrong",
+            session=mock_session,
+        )
+
+        with pytest.raises(ZowietekAuthError):
+            await client.async_power_on()

@@ -39,6 +39,8 @@ class ZowietekMediaPlayer(ZowietekEntity, MediaPlayerEntity):
 
     Represents the ZowieBox device in decoder mode, allowing users to select
     and play various stream sources including RTSP, RTMP, SRT, and NDI streams.
+    Also supports putting the device into standby mode to allow connected
+    displays (especially projectors) to power down.
     """
 
     _attr_icon = "mdi:video-input-antenna"
@@ -47,6 +49,8 @@ class ZowietekMediaPlayer(ZowietekEntity, MediaPlayerEntity):
         | MediaPlayerEntityFeature.STOP
         | MediaPlayerEntityFeature.SELECT_SOURCE
         | MediaPlayerEntityFeature.PLAY_MEDIA
+        | MediaPlayerEntityFeature.TURN_ON
+        | MediaPlayerEntityFeature.TURN_OFF
     )
 
     def __init__(self, coordinator: ZowietekCoordinator) -> None:
@@ -63,12 +67,19 @@ class ZowietekMediaPlayer(ZowietekEntity, MediaPlayerEntity):
         """Return the current state of the media player.
 
         Returns:
+            MediaPlayerState.STANDBY if device is in standby mode,
             MediaPlayerState.PLAYING if decoder is active,
             MediaPlayerState.IDLE if stopped,
             None if no data available.
         """
         if self.coordinator.data is None:
             return None
+
+        # Check if device is in standby mode first
+        run_status = self.coordinator.data.run_status
+        # run_status: 0 = standby, 1 = running
+        if run_status.get("status", 1) == 0:
+            return MediaPlayerState.STANDBY
 
         decoder_status = self.coordinator.data.decoder_status
         # Coordinator stores decoder state under 'state' key
@@ -375,6 +386,39 @@ class ZowietekMediaPlayer(ZowietekEntity, MediaPlayerEntity):
         except ZowietekApiError as err:
             _LOGGER.error("Failed to play media %s: %s", media_id, err)
             raise HomeAssistantError(f"Failed to play media: {err}") from err
+
+        await self.coordinator.async_request_refresh()
+
+    async def async_turn_off(self) -> None:
+        """Put the device into standby mode.
+
+        This allows connected displays (especially projectors) to power down
+        their lamps and save energy when not in use.
+
+        Raises:
+            HomeAssistantError: If the device cannot be put into standby.
+        """
+        try:
+            await self.coordinator.client.async_power_off()
+        except ZowietekApiError as err:
+            _LOGGER.error("Failed to put device into standby: %s", err)
+            raise HomeAssistantError(f"Failed to put device into standby: {err}") from err
+
+        await self.coordinator.async_request_refresh()
+
+    async def async_turn_on(self) -> None:
+        """Wake the device from standby mode.
+
+        Resumes normal operation and re-enables HDMI output.
+
+        Raises:
+            HomeAssistantError: If the device cannot be woken.
+        """
+        try:
+            await self.coordinator.client.async_power_on()
+        except ZowietekApiError as err:
+            _LOGGER.error("Failed to wake device: %s", err)
+            raise HomeAssistantError(f"Failed to wake device: {err}") from err
 
         await self.coordinator.async_request_refresh()
 

@@ -1019,6 +1019,53 @@ class ZowietekClient:
             {"group": "streamplay", "opt": "ndi_find"},
         )
 
+    # =========================================================================
+    # Power Control Methods (standby/wake)
+    # =========================================================================
+
+    async def async_get_run_status(self) -> dict[str, Any]:
+        """Get the device run status (running vs standby).
+
+        Returns:
+            Dictionary containing 'run_status':
+            - 0 = Device is in standby mode
+            - 1 = Device is running normally
+        """
+        data = await self._request(
+            "/system?option=getinfo",
+            {"group": "syscontrol", "opt": "get_run_status"},
+        )
+        return self._extract_data(data, "data")
+
+    async def async_power_off(self) -> None:
+        """Put the device into standby mode.
+
+        This stops all processing and blanks the HDMI output, allowing
+        connected displays (especially projectors) to enter standby.
+
+        Raises:
+            ZowietekAuthError: If authentication fails.
+        """
+        await self._request(
+            "/system?option=setinfo",
+            {"group": "syscontrol", "opt": "power_off"},
+            requires_auth=True,
+        )
+
+    async def async_power_on(self) -> None:
+        """Wake the device from standby mode.
+
+        Resumes normal operation and re-enables HDMI output.
+
+        Raises:
+            ZowietekAuthError: If authentication fails.
+        """
+        await self._request(
+            "/system?option=setinfo",
+            {"group": "syscontrol", "opt": "power_on"},
+            requires_auth=True,
+        )
+
     async def close(self) -> None:
         """Close the client session.
 

@@ -265,6 +265,15 @@ class ZowietekNdiSources(TypedDict):
     ndi_sources: list[ZowietekNdiSourceEntry]
 
 
+class ZowietekRunStatus(TypedDict):
+    """Run status from async_get_run_status API.
+
+    Contains the device power state (running vs standby).
+    """
+
+    run_status: NotRequired[int]
+
+
 @dataclass
 class ZowietekData:
     """Container for all ZowieBox device data.
@@ -283,3 +292,4 @@ class ZowietekData:
     streamplay: dict[str, str | int | list[dict[str, str | int]]]
     decoder_status: dict[str, str | int]
     ndi_sources: list[dict[str, str | int]]
+    run_status: dict[str, int]

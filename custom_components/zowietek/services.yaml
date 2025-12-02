@@ -1,0 +1,90 @@
+set_ndi_settings:
+  name: Set NDI Settings
+  description: Configure NDI stream name and group for a ZowieBox device.
+  fields:
+    device_id:
+      name: Device
+      description: The ZowieBox device to configure.
+      required: true
+      selector:
+        device:
+          integration: zowietek
+    name:
+      name: NDI Name
+      description: The NDI stream name (visible to NDI receivers).
+      required: true
+      example: "ZowieBox-Studio1"
+      selector:
+        text:
+    group:
+      name: NDI Group
+      description: The NDI group name (optional, for organizing sources).
+      required: false
+      example: "Production"
+      selector:
+        text:
+
+set_rtmp_url:
+  name: Set RTMP URL
+  description: Configure RTMP streaming destination URL and stream key.
+  fields:
+    device_id:
+      name: Device
+      description: The ZowieBox device to configure.
+      required: true
+      selector:
+        device:
+          integration: zowietek
+    url:
+      name: RTMP URL
+      description: The RTMP server URL (e.g., rtmp://live.example.com/live).
+      required: true
+      example: "rtmp://live.example.com/live"
+      selector:
+        text:
+    key:
+      name: Stream Key
+      description: The stream key for authentication (optional).
+      required: false
+      example: "stream_key_123"
+      selector:
+        text:
+
+set_srt_settings:
+  name: Set SRT Settings
+  description: Configure SRT (Secure Reliable Transport) streaming settings.
+  fields:
+    device_id:
+      name: Device
+      description: The ZowieBox device to configure.
+      required: true
+      selector:
+        device:
+          integration: zowietek
+    port:
+      name: Port
+      description: The SRT port number (1-65535).
+      required: true
+      example: 9000
+      selector:
+        number:
+          min: 1
+          max: 65535
+          mode: box
+    latency:
+      name: Latency
+      description: The SRT latency in milliseconds (20-8000, optional).
+      required: false
+      example: 120
+      selector:
+        number:
+          min: 20
+          max: 8000
+          unit_of_measurement: ms
+          mode: box
+    passphrase:
+      name: Passphrase
+      description: The SRT encryption passphrase (optional).
+      required: false
+      selector:
+        text:

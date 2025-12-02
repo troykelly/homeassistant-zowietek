@@ -647,6 +647,111 @@ class ZowietekClient:
             requires_auth=True,
         )
 
+    async def async_set_ndi_settings(
+        self,
+        name: str,
+        group: str | None = None,
+    ) -> None:
+        """Set NDI name and group settings.
+
+        Configures the NDI source name and optionally the group.
+
+        Args:
+            name: The NDI source name (visible to NDI receivers).
+            group: The NDI group name (optional, for organizing sources).
+
+        Raises:
+            ZowietekAuthError: If authentication fails.
+            ZowietekApiError: If the settings are invalid.
+        """
+        data: dict[str, str | int] = {"machinename": name}
+        if group is not None:
+            data["groups"] = group
+
+        await self._request(
+            "/video?option=setinfo",
+            {
+                "group": "ndi",
+                "opt": "set_ndi_info",
+                "data": data,
+            },
+            requires_auth=True,
+        )
+
+    async def async_set_rtmp_url(
+        self,
+        url: str,
+        key: str | None = None,
+    ) -> None:
+        """Set RTMP streaming URL and key.
+
+        Configures the RTMP destination URL and optionally the stream key.
+
+        Args:
+            url: The RTMP server URL (e.g., rtmp://live.example.com/live).
+            key: The stream key for authentication (optional).
+
+        Raises:
+            ZowietekAuthError: If authentication fails.
+            ZowietekApiError: If the URL is invalid.
+        """
+        # Build the full URL with key if provided
+        full_url = f"{url}/{key}" if key else url
+
+        await self._request(
+            "/stream?option=setinfo",
+            {
+                "group": "publish",
+                "opt": "update_publish_url",
+                "data": {
+                    "index": 0,  # RTMP is typically index 0
+                    "type": "rtmp",
+                    "url": full_url,
+                },
+            },
+            requires_auth=True,
+        )
+
+    async def async_set_srt_settings(
+        self,
+        port: int,
+        latency: int | None = None,
+        passphrase: str | None = None,
+    ) -> None:
+        """Set SRT streaming settings.
+
+        Configures SRT (Secure Reliable Transport) settings including
+        port, latency, and encryption passphrase.
+
+        Args:
+            port: The SRT port number (1-65535).
+            latency: The SRT latency in milliseconds (optional).
+            passphrase: The SRT encryption passphrase (optional).
+
+        Raises:
+            ZowietekAuthError: If authentication fails.
+            ZowietekApiError: If the settings are invalid.
+        """
+        data: dict[str, str | int] = {
+            "index": 1,  # SRT is typically index 1
+            "type": "srt",
+            "port": port,
+        }
+        if latency is not None:
+            data["latency"] = latency
+        if passphrase is not None:
+            data["passphrase"] = passphrase
+
+        await self._request(
+            "/stream?option=setinfo",
+            {
+                "group": "publish",
+                "opt": "update_srt_info",
+                "data": data,
+            },
+            requires_auth=True,
+        )
+
     async def close(self) -> None:
         """Close the client session.
 

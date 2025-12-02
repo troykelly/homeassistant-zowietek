@@ -131,7 +131,7 @@ class TestServiceRegistration:
         hass: HomeAssistant,
         mock_config_entry_for_services: MockConfigEntry,
     ) -> None:
-        """Test that services are unregistered when entry is unloaded."""
+        """Test that services are unregistered when the last entry is unloaded."""
         await setup_integration_with_mocked_client(
             hass,
             mock_config_entry_for_services,
@@ -139,17 +139,17 @@ class TestServiceRegistration:
 
         # Verify services exist
         assert hass.services.has_service(DOMAIN, SERVICE_SET_NDI_SETTINGS)
+        assert hass.services.has_service(DOMAIN, SERVICE_SET_RTMP_URL)
+        assert hass.services.has_service(DOMAIN, SERVICE_SET_SRT_SETTINGS)
 
         # Unload the entry
         await hass.config_entries.async_unload(mock_config_entry_for_services.entry_id)
         await hass.async_block_till_done()
 
-        # Services should still be registered (only removed when all entries unloaded)
-        # Re-setup to test that services work correctly after reload
-        await hass.config_entries.async_setup(mock_config_entry_for_services.entry_id)
-        await hass.async_block_till_done()
-
-        assert hass.services.has_service(DOMAIN, SERVICE_SET_NDI_SETTINGS)
+        # Services should be unregistered when last entry is unloaded
+        assert not hass.services.has_service(DOMAIN, SERVICE_SET_NDI_SETTINGS)
+        assert not hass.services.has_service(DOMAIN, SERVICE_SET_RTMP_URL)
+        assert not hass.services.has_service(DOMAIN, SERVICE_SET_SRT_SETTINGS)
 
 
 class TestSetNdiSettingsService:

@@ -34,6 +34,12 @@ class ZowietekCoordinator(DataUpdateCoordinator[ZowietekData]):
     This coordinator handles polling the ZowieBox device for all data types
     and distributing that data to all entities. It uses parallel API calls
     for better performance and handles errors appropriately.
+
+    Connection recovery is handled automatically:
+    - Temporary network failures mark entities as unavailable
+    - The coordinator continues polling and recovers when the device returns
+    - Auth failures trigger the reauthentication flow
+    - Consecutive failures are tracked for diagnostics
     """
 
     config_entry: ConfigEntry[Any]
@@ -61,6 +67,17 @@ class ZowietekCoordinator(DataUpdateCoordinator[ZowietekData]):
             username=entry.data[CONF_USERNAME],
             password=entry.data[CONF_PASSWORD],
         )
+        self._consecutive_failures: int = 0
+
+    @property
+    def consecutive_failures(self) -> int:
+        """Return the number of consecutive update failures.
+
+        This counter is incremented each time an update fails and reset
+        to zero on successful updates. Useful for diagnostics and
+        determining if a device has persistent connection issues.
+        """
+        return self._consecutive_failures
 
     @property
     def device_id(self) -> str:
@@ -313,10 +330,20 @@ class ZowietekCoordinator(DataUpdateCoordinator[ZowietekData]):
                 system_data["manufacturer"] = "Zowietek"
 
             elapsed = time.monotonic() - start
-            _LOGGER.debug(
-                "Finished fetching zowietek data in %.3f seconds (success: True)",
-                elapsed,
-            )
+
+            # Log recovery if we were previously failing
+            if self._consecutive_failures > 0:
+                _LOGGER.info(
+                    "Connection to %s restored after %d failed attempts",
+                    self.config_entry.data[CONF_HOST],
+                    self._consecutive_failures,
+                )
+                self._consecutive_failures = 0
+            else:
+                _LOGGER.debug(
+                    "Finished fetching zowietek data in %.3f seconds (success: True)",
+                    elapsed,
+                )
 
             # Build dashboard data
             dashboard_data: dict[str, str | int | float] = {}
@@ -341,16 +368,47 @@ class ZowietekCoordinator(DataUpdateCoordinator[ZowietekData]):
 
         except ZowietekAuthError as err:
             # Authentication errors should trigger reauthentication flow
+            self._consecutive_failures += 1
             raise ConfigEntryAuthFailed(
                 f"Authentication failed for {self.config_entry.data[CONF_HOST]}"
             ) from err
         except ZowietekConnectionError as err:
             # Connection errors mark entities as unavailable
+            self._consecutive_failures += 1
+            if self._consecutive_failures == 1:
+                _LOGGER.warning(
+                    "Connection to %s failed: %s. Entities will be unavailable until "
+                    "connection is restored",
+                    self.config_entry.data[CONF_HOST],
+                    err,
+                )
+            else:
+                _LOGGER.debug(
+                    "Connection to %s still unavailable (failure %d): %s",
+                    self.config_entry.data[CONF_HOST],
+                    self._consecutive_failures,
+                    err,
+                )
             raise UpdateFailed(
                 f"Unable to connect to {self.config_entry.data[CONF_HOST]}: {err}"
             ) from err
         except ZowietekError as err:
             # Other API errors also mark entities as unavailable
+            self._consecutive_failures += 1
+            if self._consecutive_failures == 1:
+                _LOGGER.warning(
+                    "Error communicating with %s: %s. Entities will be unavailable "
+                    "until connection is restored",
+                    self.config_entry.data[CONF_HOST],
+                    err,
+                )
+            else:
+                _LOGGER.debug(
+                    "Communication with %s still failing (failure %d): %s",
+                    self.config_entry.data[CONF_HOST],
+                    self._consecutive_failures,
+                    err,
+                )
             raise UpdateFailed(
                 f"Error communicating with {self.config_entry.data[CONF_HOST]}: {err}"
             ) from err

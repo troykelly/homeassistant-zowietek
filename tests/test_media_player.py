@@ -1803,13 +1803,13 @@ class TestMediaPlayerGo2rtcConversion:
 
         assert media_player._needs_go2rtc_conversion("camera.front_door") is True
 
-    async def test_needs_go2rtc_conversion_returns_false_for_plain_http(
+    async def test_needs_go2rtc_conversion_returns_true_for_plain_http(
         self,
         hass: HomeAssistant,
         mock_config_entry: MockConfigEntry,
         mock_zowietek_client: MagicMock,
     ) -> None:
-        """Test plain HTTP URLs do not need conversion."""
+        """Test plain HTTP URLs need conversion (ZowieBox doesn't support HTTP)."""
         from custom_components.zowietek.media_player import ZowietekMediaPlayer
 
         await _setup_integration(hass, mock_config_entry)
@@ -1817,9 +1817,10 @@ class TestMediaPlayerGo2rtcConversion:
         coordinator = mock_config_entry.runtime_data
         media_player = ZowietekMediaPlayer(coordinator)
 
-        # HTTP without HLS/DASH extension
-        assert media_player._needs_go2rtc_conversion("http://example.com/stream") is False
-        assert media_player._needs_go2rtc_conversion("https://example.com/video.mp4") is False
+        # All HTTP/HTTPS URLs need conversion since ZowieBox only supports RTSP/RTMP/SRT
+        assert media_player._needs_go2rtc_conversion("http://example.com/stream") is True
+        assert media_player._needs_go2rtc_conversion("https://example.com/video.mp4") is True
+        assert media_player._needs_go2rtc_conversion("http://tv.example.com/ts/stream/123") is True
 
     async def test_play_media_with_camera_entity_type(
         self,

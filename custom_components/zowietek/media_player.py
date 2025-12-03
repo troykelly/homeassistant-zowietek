@@ -378,13 +378,11 @@ class ZowietekMediaPlayer(ZowietekEntity, MediaPlayerEntity):
         if any(url_lower.startswith(proto) for proto in NATIVE_PROTOCOLS):
             return False
 
-        # HTTP/HTTPS URLs need evaluation
+        # HTTP/HTTPS URLs always need conversion
+        # ZowieBox only natively supports RTSP, RTMP, and SRT protocols
+        # All HTTP-based streams (HLS, DASH, TS, plain HTTP) require go2rtc
         if url_lower.startswith(("http://", "https://")):
-            # HLS/DASH manifests need conversion
-            if any(url_lower.endswith(ext) for ext in STREAMING_MANIFEST_EXTENSIONS):
-                return True
-            # Plain HTTP streams - ZowieBox can handle directly
-            return False
+            return True
 
         # Unknown protocol - try conversion if go2rtc available
         return True

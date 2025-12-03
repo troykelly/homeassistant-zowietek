@@ -14,6 +14,7 @@ from custom_components.zowietek.const import (
     GO2RTC_DEFAULT_API_URL,
     GO2RTC_DEFAULT_RTSP_PORT,
     GO2RTC_DOMAIN,
+    GO2RTC_EXTERNAL_RTSP_PORT,
     GO2RTC_STREAM_PREFIX,
     GO2RTC_STREAM_TTL,
 )
@@ -849,7 +850,7 @@ class TestGo2rtcHelperExternalServer:
         assert api_url == "http://frigate.example.com:1984"
         assert rtsp_host == "frigate.example.com"
         # External servers use standard go2rtc RTSP port
-        assert rtsp_port == 8554
+        assert rtsp_port == GO2RTC_EXTERNAL_RTSP_PORT
 
     def test_get_go2rtc_config_localhost(
         self,

@@ -23,6 +23,7 @@ from .const import (
     GO2RTC_DEFAULT_API_URL,
     GO2RTC_DEFAULT_RTSP_PORT,
     GO2RTC_DOMAIN,
+    GO2RTC_EXTERNAL_RTSP_PORT,
     GO2RTC_STREAM_PREFIX,
     GO2RTC_STREAM_TTL,
 )
@@ -94,6 +95,7 @@ class Go2rtcHelper:
         """
         # Check if we have cached values
         if self._api_url is not None and self._rtsp_host is not None:
+            _LOGGER.debug("Using cached go2rtc config: %s", self._api_url)
             return self._api_url, self._rtsp_host, self._rtsp_port
 
         # Try to get the go2rtc config from Home Assistant's data store
@@ -117,7 +119,7 @@ class Go2rtcHelper:
                 rtsp_port = GO2RTC_DEFAULT_RTSP_PORT  # 18554 for HA-managed
             else:
                 # External server - use standard go2rtc RTSP port
-                rtsp_port = 8554
+                rtsp_port = GO2RTC_EXTERNAL_RTSP_PORT
 
             self._api_url = api_url
             self._rtsp_host = rtsp_host

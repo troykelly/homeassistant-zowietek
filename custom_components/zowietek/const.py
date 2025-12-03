@@ -30,7 +30,8 @@ GO2RTC_DOMAIN = "go2rtc"
 
 # Default go2rtc settings (HA-managed instance fallbacks)
 GO2RTC_DEFAULT_API_URL = "http://127.0.0.1:11984"
-GO2RTC_DEFAULT_RTSP_PORT = 18554  # HA-managed uses 18554, external typically 8554
+GO2RTC_DEFAULT_RTSP_PORT = 18554  # HA-managed go2rtc uses non-standard port
+GO2RTC_EXTERNAL_RTSP_PORT = 8554  # Standard go2rtc RTSP port for external servers
 
 # go2rtc stream management
 GO2RTC_STREAM_PREFIX = "zowietek_"

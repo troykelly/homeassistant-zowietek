@@ -7,31 +7,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- Initial project scaffolding
-- Development environment setup (devcontainer)
-- GitHub workflows for CI/CD
-- Issue templates for bug reports, feature requests, and support
-
-## [0.1.0] - TBD
+## [0.2.0] - 2024-12-03
 
 ### Added
-- Initial release of Home Assistant Zowietek integration
-- Config flow for device setup
-- Support for ZowieBox 4K HDMI NDI Encoder/Decoder
-- Sensor entities for device status and stream information
-- Binary sensor entities for streaming state
-- Switch entities for stream control (NDI, RTMP, SRT, RTSP)
-- Select entities for video mode and input source
-- Button entities for device actions (reboot, etc.)
-- Custom services for advanced control
+- go2rtc integration for HLS/DASH stream conversion
+- Camera entity playback support via go2rtc
+- Configuration option to enable/disable go2rtc conversion
+- Quick Start guide for beginners (`docs/QUICK_START.md`)
+- Advanced configuration documentation (`docs/ADVANCED.md`)
+
+### Changed
+- Refactored README for better accessibility (simple content above the fold)
+- Improved documentation structure with progressive disclosure
+- Enhanced CHANGELOG with categorized sections
+
+### Fixed
+- HTTP URLs now properly convert through go2rtc when needed
+
+## [0.1.0] - 2024-12-01
+
+Initial release of the Zowietek integration for Home Assistant.
+
+### Added
+
+**Device Support**
+- ZowieBox 4K HDMI NDI Encoder/Decoder
+- Automatic device discovery via UDP multicast
+- Manual device configuration by IP address
+
+**Entities**
+- Sensors: resolution, frame rate, bitrate, encoder type, NDI name, firmware, hardware version, serial number, uptime, CPU temperature, CPU usage
+- Binary sensors: streaming status, video input detection, NDI/RTMP/SRT enabled states
+- Switches: NDI, RTMP, and SRT stream control
+- Selects: encoder type, output format
+- Numbers: audio volume, stream bitrate
+- Buttons: reboot, refresh
+- Media player: decoder playback with source selection and stream URL support
+
+**Services**
+- `zowietek.set_ndi_settings` - Configure NDI stream name and group
+- `zowietek.set_rtmp_url` - Set RTMP destination URL and stream key
+- `zowietek.set_srt_settings` - Configure SRT port, latency, and passphrase
+
+**Device Triggers**
+- `stream_started` - Triggered when any stream output activates
+- `stream_stopped` - Triggered when all stream outputs stop
+- `video_input_detected` - Triggered when HDMI video signal is detected
+- `video_input_lost` - Triggered when HDMI video signal is lost
+
+**Configuration**
+- Config flow for UI-based device setup
+- Options flow for update interval configuration
+- Reauthentication flow for credential updates
+- Reconfiguration flow for host/credential changes
+
+**Other**
 - Diagnostics download for troubleshooting
+- Full translation support (English)
 
 ### Technical
-- Python 3.13+ support (Home Assistant 2025.x)
-- 100% test coverage requirement
-- Strict type checking with mypy
-- TypedDict definitions for API responses
 
-[Unreleased]: https://github.com/troykelly/homeassistant-zowietek/compare/v0.1.0...HEAD
+- Python 3.13+ support
+- Home Assistant 2025.11.3+ required
+- 100% test coverage
+- Strict type checking with mypy
+- TypedDict definitions for all API responses
+
+[Unreleased]: https://github.com/troykelly/homeassistant-zowietek/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/troykelly/homeassistant-zowietek/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/troykelly/homeassistant-zowietek/releases/tag/v0.1.0

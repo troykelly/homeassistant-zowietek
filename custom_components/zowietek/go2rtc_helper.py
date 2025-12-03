@@ -106,6 +106,22 @@ class Go2rtcHelper:
             )
             return "127.0.0.1"
 
+    def _format_host_for_url(self, host: str) -> str:
+        """Format a host address for use in a URL.
+
+        IPv6 addresses must be enclosed in brackets for URLs.
+
+        Args:
+            host: The hostname or IP address.
+
+        Returns:
+            The host formatted for URL use (IPv6 addresses wrapped in brackets).
+        """
+        # Check if this is an IPv6 address (contains colon but not already bracketed)
+        if ":" in host and not host.startswith("["):
+            return f"[{host}]"
+        return host
+
     async def async_start(self) -> None:
         """Start the helper and begin the cleanup task.
 
@@ -119,11 +135,11 @@ class Go2rtcHelper:
 
         This should be called when the integration is unloaded.
         """
-        if self._cleanup_task:
+        if self._cleanup_task and not self._cleanup_task.done():
             self._cleanup_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self._cleanup_task
-            self._cleanup_task = None
+        self._cleanup_task = None
 
         await self._cleanup_all_streams()
 
@@ -146,8 +162,8 @@ class Go2rtcHelper:
             _LOGGER.debug("go2rtc not available, cannot convert stream")
             return None
 
-        # Generate unique stream name from URL hash
-        url_hash = hashlib.md5(source_url.encode()).hexdigest()[:8]
+        # Generate unique stream name from URL hash (12 chars for better uniqueness)
+        url_hash = hashlib.md5(source_url.encode()).hexdigest()[:12]
         stream_name = f"{GO2RTC_STREAM_PREFIX}{url_hash}"
 
         # Check if already converted (cache hit)
@@ -161,7 +177,9 @@ class Go2rtcHelper:
             await self._add_stream(stream_name, source_url)
             # Use HA's actual host address so ZowieBox can connect over network
             ha_host = self._get_ha_host()
-            rtsp_url = f"rtsp://{ha_host}:{GO2RTC_RTSP_PORT}/{stream_name}"
+            # Format host for URL (handles IPv6 addresses)
+            formatted_host = self._format_host_for_url(ha_host)
+            rtsp_url = f"rtsp://{formatted_host}:{GO2RTC_RTSP_PORT}/{stream_name}"
 
             self._streams[stream_name] = ManagedStream(
                 name=stream_name,

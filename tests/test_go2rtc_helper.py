@@ -693,3 +693,69 @@ class TestGo2rtcHelperHostResolution:
             assert rtsp_url.startswith("rtsp://192.168.1.50:")
 
         await helper.async_stop()
+
+    def test_format_host_for_url_ipv4(
+        self,
+        mock_hass_with_go2rtc: MagicMock,
+    ) -> None:
+        """Test _format_host_for_url leaves IPv4 addresses unchanged."""
+        helper = Go2rtcHelper(mock_hass_with_go2rtc)
+
+        assert helper._format_host_for_url("192.168.1.100") == "192.168.1.100"
+        assert helper._format_host_for_url("10.0.0.1") == "10.0.0.1"
+        assert helper._format_host_for_url("127.0.0.1") == "127.0.0.1"
+
+    def test_format_host_for_url_hostname(
+        self,
+        mock_hass_with_go2rtc: MagicMock,
+    ) -> None:
+        """Test _format_host_for_url leaves hostnames unchanged."""
+        helper = Go2rtcHelper(mock_hass_with_go2rtc)
+
+        assert helper._format_host_for_url("homeassistant.local") == "homeassistant.local"
+        assert helper._format_host_for_url("my-server.example.com") == "my-server.example.com"
+
+    def test_format_host_for_url_ipv6(
+        self,
+        mock_hass_with_go2rtc: MagicMock,
+    ) -> None:
+        """Test _format_host_for_url wraps IPv6 addresses in brackets."""
+        helper = Go2rtcHelper(mock_hass_with_go2rtc)
+
+        # Standard IPv6 addresses should be wrapped
+        assert helper._format_host_for_url("::1") == "[::1]"
+        assert helper._format_host_for_url("fe80::1") == "[fe80::1]"
+        assert helper._format_host_for_url("2001:db8::1") == "[2001:db8::1]"
+        assert helper._format_host_for_url("fd00:1234:5678:9abc::1") == "[fd00:1234:5678:9abc::1]"
+
+    def test_format_host_for_url_ipv6_already_bracketed(
+        self,
+        mock_hass_with_go2rtc: MagicMock,
+    ) -> None:
+        """Test _format_host_for_url doesn't double-bracket IPv6 addresses."""
+        helper = Go2rtcHelper(mock_hass_with_go2rtc)
+
+        # Already bracketed addresses should not be modified
+        assert helper._format_host_for_url("[::1]") == "[::1]"
+        assert helper._format_host_for_url("[fe80::1]") == "[fe80::1]"
+
+    async def test_convert_stream_handles_ipv6(
+        self,
+        mock_hass_with_go2rtc: MagicMock,
+        mock_aiohttp_session: MagicMock,
+    ) -> None:
+        """Test async_convert_stream properly formats IPv6 addresses in RTSP URL."""
+        helper = Go2rtcHelper(mock_hass_with_go2rtc)
+
+        with patch(
+            "custom_components.zowietek.go2rtc_helper.get_url",
+            return_value="http://[fd00::1]:8123",
+        ):
+            rtsp_url = await helper.async_convert_stream("http://example.com/stream.m3u8")
+
+            assert rtsp_url is not None
+            # IPv6 should be bracketed in the URL
+            assert "[fd00::1]" in rtsp_url
+            assert rtsp_url.startswith("rtsp://[fd00::1]:")
+
+        await helper.async_stop()

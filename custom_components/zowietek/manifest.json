@@ -1,6 +1,7 @@
 {
   "domain": "zowietek",
   "name": "Zowietek",
+  "after_dependencies": ["go2rtc"],
   "codeowners": ["@troykelly"],
   "config_flow": true,
   "documentation": "https://github.com/troykelly/homeassistant-zowietek",

@@ -435,7 +435,8 @@ class ZowietekMediaPlayer(ZowietekEntity, MediaPlayerEntity):
             url_to_play = converted_url
 
         elif self._needs_go2rtc_conversion(media_id):
-            # URL needs conversion (HLS, DASH, etc.)
+            # URL needs conversion (HTTP/HTTPS URLs require go2rtc)
+            # ZowieBox only natively supports RTSP, RTMP, and SRT protocols
             go2rtc_helper = getattr(self.coordinator, "go2rtc_helper", None)
             go2rtc_enabled = getattr(self.coordinator, "go2rtc_enabled", False)
 
@@ -445,14 +446,15 @@ class ZowietekMediaPlayer(ZowietekEntity, MediaPlayerEntity):
                     url_to_play = converted_url
                     _LOGGER.debug("Converted stream via go2rtc: %s -> %s", media_id, url_to_play)
                 else:
-                    _LOGGER.warning(
-                        "go2rtc conversion failed for %s, attempting direct play",
-                        media_id,
+                    raise HomeAssistantError(
+                        f"go2rtc conversion failed for {media_id}. "
+                        f"ZowieBox cannot play HTTP URLs directly."
                     )
             else:
-                _LOGGER.debug(
-                    "go2rtc not available/enabled, attempting direct play for %s",
-                    media_id,
+                raise HomeAssistantError(
+                    f"go2rtc is required to play HTTP URLs but is not available. "
+                    f"Please ensure go2rtc is installed and the integration is enabled. "
+                    f"URL: {media_id}"
                 )
 
         try:

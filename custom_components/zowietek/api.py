@@ -920,6 +920,26 @@ class ZowietekClient:
             requires_auth=True,
         )
 
+    async def async_disable_streamplay_source(self, index: int) -> None:
+        """Disable a streamplay source by index (turn it off).
+
+        Args:
+            index: Index of the source to disable.
+
+        Raises:
+            ZowietekAuthError: If authentication fails.
+            ZowietekApiError: If the operation fails.
+        """
+        await self._request(
+            "/streamplay?option=setinfo",
+            {
+                "group": "streamplay",
+                "opt": "streamplay_switch",
+                "data": {"index": index, "switch": 0},
+            },
+            requires_auth=True,
+        )
+
     async def async_stop_streamplay(self) -> None:
         """Stop current streamplay/decoder playback.
 

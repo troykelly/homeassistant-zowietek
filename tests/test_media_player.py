@@ -805,7 +805,12 @@ class TestMediaPlayerPlayMedia:
         mock_config_entry: MockConfigEntry,
         mock_zowietek_client: MagicMock,
     ) -> None:
-        """Test play_media modifies existing HA source instead of adding a new one."""
+        """Test play_media modifies existing HA source instead of adding a new one.
+
+        The ZowieBox streamplay lifecycle requires:
+        1. Update URL with switch=False
+        2. Then explicitly enable with async_select_streamplay_source
+        """
         from custom_components.zowietek.media_player import (
             HA_SOURCE_NAME,
             ZowietekMediaPlayer,
@@ -814,7 +819,7 @@ class TestMediaPlayerPlayMedia:
         await _setup_integration(hass, mock_config_entry)
 
         coordinator = mock_config_entry.runtime_data
-        # Include an existing "Home Assistant" source in the streamplay sources
+        # Include an existing "Home Assistant" source in the streamplay sources (OFF)
         coordinator.data.streamplay["sources"].append(
             {
                 "index": 5,
@@ -830,14 +835,16 @@ class TestMediaPlayerPlayMedia:
             media_id="rtsp://new.stream/live",
         )
 
-        # Should modify existing source, not add a new one
+        # Should modify existing source with switch=False, then enable it
         mock_zowietek_client.async_add_decoding_url.assert_not_called()
         mock_zowietek_client.async_modify_decoding_url.assert_called_once()
         call_args = mock_zowietek_client.async_modify_decoding_url.call_args
         assert call_args[1]["index"] == 5
         assert call_args[1]["name"] == HA_SOURCE_NAME
         assert call_args[1]["url"] == "rtsp://new.stream/live"
-        assert call_args[1]["switch"] is True
+        assert call_args[1]["switch"] is False  # Updated OFF, then enabled separately
+        # Should then enable the source
+        mock_zowietek_client.async_select_streamplay_source.assert_called_once_with(5)
 
     async def test_play_media_switches_to_existing_url(
         self,
@@ -845,20 +852,19 @@ class TestMediaPlayerPlayMedia:
         mock_config_entry: MockConfigEntry,
         mock_zowietek_client: MagicMock,
     ) -> None:
-        """Test play_media switches to existing source if URL already exists."""
+        """Test play_media switches to existing source if URL already exists (source OFF)."""
         from custom_components.zowietek.media_player import ZowietekMediaPlayer
 
         await _setup_integration(hass, mock_config_entry)
 
         coordinator = mock_config_entry.runtime_data
-        # The default mock data has sources with URLs, let's use one of them
-        # Add a source with a specific URL we'll request
+        # Add a source with a specific URL (OFF state)
         coordinator.data.streamplay["sources"].append(
             {
                 "index": 7,
                 "name": "Existing Camera",
                 "url": "rtsp://existing.camera/stream",
-                "switch": 0,
+                "switch": 0,  # OFF
             }
         )
         media_player = ZowietekMediaPlayer(coordinator)
@@ -869,10 +875,83 @@ class TestMediaPlayerPlayMedia:
             media_id="rtsp://existing.camera/stream",
         )
 
-        # Should just switch to the existing source, not add or modify
+        # Should just turn on the existing source, not add or modify
         mock_zowietek_client.async_add_decoding_url.assert_not_called()
         mock_zowietek_client.async_modify_decoding_url.assert_not_called()
+        mock_zowietek_client.async_disable_streamplay_source.assert_not_called()
         mock_zowietek_client.async_select_streamplay_source.assert_called_once_with(7)
+
+    async def test_play_media_cycles_active_source_to_reload(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test play_media cycles OFF/ON when source is already active to force reload."""
+        from custom_components.zowietek.media_player import ZowietekMediaPlayer
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        # Add a source with a specific URL that is ACTIVE (switch=1)
+        coordinator.data.streamplay["sources"].append(
+            {
+                "index": 7,
+                "name": "Active Camera",
+                "url": "rtsp://active.camera/stream",
+                "switch": 1,  # ON - already active
+            }
+        )
+        media_player = ZowietekMediaPlayer(coordinator)
+
+        # Request the same URL that's already playing
+        await media_player.async_play_media(
+            media_type="url",
+            media_id="rtsp://active.camera/stream",
+        )
+
+        # Should cycle OFF then ON to force reload
+        mock_zowietek_client.async_add_decoding_url.assert_not_called()
+        mock_zowietek_client.async_modify_decoding_url.assert_not_called()
+        mock_zowietek_client.async_disable_streamplay_source.assert_called_once_with(7)
+        mock_zowietek_client.async_select_streamplay_source.assert_called_once_with(7)
+
+    async def test_play_media_ha_source_active_cycles_before_update(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test play_media cycles HA source OFF before updating URL when active."""
+        from custom_components.zowietek.media_player import (
+            HA_SOURCE_NAME,
+            ZowietekMediaPlayer,
+        )
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+        # Include an existing "Home Assistant" source that is ACTIVE
+        coordinator.data.streamplay["sources"].append(
+            {
+                "index": 5,
+                "name": HA_SOURCE_NAME,
+                "url": "rtsp://old.stream/live",
+                "switch": 1,  # ON - already active
+            }
+        )
+        media_player = ZowietekMediaPlayer(coordinator)
+
+        await media_player.async_play_media(
+            media_type="url",
+            media_id="rtsp://new.stream/live",
+        )
+
+        # Should turn OFF the active HA source first, then update, then turn ON
+        mock_zowietek_client.async_add_decoding_url.assert_not_called()
+        mock_zowietek_client.async_disable_streamplay_source.assert_called_once_with(5)
+        mock_zowietek_client.async_modify_decoding_url.assert_called_once()
+        mock_zowietek_client.async_select_streamplay_source.assert_called_once_with(5)
 
 
 class TestMediaPlayerExtraAttributes:

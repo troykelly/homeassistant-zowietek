@@ -11,8 +11,9 @@ import pytest
 from homeassistant.core import HomeAssistant
 
 from custom_components.zowietek.const import (
-    GO2RTC_API_PORT,
-    GO2RTC_RTSP_PORT,
+    GO2RTC_DEFAULT_API_URL,
+    GO2RTC_DEFAULT_RTSP_PORT,
+    GO2RTC_DOMAIN,
     GO2RTC_STREAM_PREFIX,
     GO2RTC_STREAM_TTL,
 )
@@ -24,9 +25,24 @@ if TYPE_CHECKING:
 
 @pytest.fixture
 def mock_hass_with_go2rtc() -> MagicMock:
-    """Create a mock Home Assistant instance with go2rtc available."""
+    """Create a mock Home Assistant instance with go2rtc available (localhost)."""
     hass = MagicMock(spec=HomeAssistant)
-    hass.data = {"go2rtc": MagicMock()}
+    # Mock the go2rtc config with localhost URL (HA-managed)
+    go2rtc_config = MagicMock()
+    go2rtc_config.url = "http://127.0.0.1:11984/"
+    hass.data = {GO2RTC_DOMAIN: go2rtc_config}
+    hass.states = MagicMock()
+    return hass
+
+
+@pytest.fixture
+def mock_hass_with_external_go2rtc() -> MagicMock:
+    """Create a mock Home Assistant instance with external go2rtc server."""
+    hass = MagicMock(spec=HomeAssistant)
+    # Mock the go2rtc config with external URL
+    go2rtc_config = MagicMock()
+    go2rtc_config.url = "http://frigate.example.com:1984"
+    hass.data = {GO2RTC_DOMAIN: go2rtc_config}
     hass.states = MagicMock()
     return hass
 
@@ -162,7 +178,7 @@ class TestGo2rtcHelperStreamConversion:
         result = await helper.async_convert_stream(source_url)
 
         assert result is not None
-        assert result.startswith(f"rtsp://127.0.0.1:{GO2RTC_RTSP_PORT}/")
+        assert result.startswith(f"rtsp://127.0.0.1:{GO2RTC_DEFAULT_RTSP_PORT}/")
         assert GO2RTC_STREAM_PREFIX in result
 
         await helper.async_stop()
@@ -318,7 +334,7 @@ class TestGo2rtcHelperCameraConversion:
         result = await helper.async_convert_camera("camera.front_door")
 
         assert result is not None
-        assert result.startswith(f"rtsp://127.0.0.1:{GO2RTC_RTSP_PORT}/")
+        assert result.startswith(f"rtsp://127.0.0.1:{GO2RTC_DEFAULT_RTSP_PORT}/")
 
         # Verify the ffmpeg source was used
         call_args = mock_aiohttp_session.put.call_args
@@ -427,10 +443,10 @@ class TestGo2rtcHelperApiCalls:
         source_url = "http://example.com/stream.m3u8"
         await helper.async_convert_stream(source_url)
 
-        # Verify PUT was called with correct URL
+        # Verify PUT was called with correct URL (uses config URL)
         call_args = mock_aiohttp_session.put.call_args
         url = call_args[0][0]
-        assert f"http://127.0.0.1:{GO2RTC_API_PORT}/api/streams" in url
+        assert "http://127.0.0.1:11984/api/streams" in url
 
         await helper.async_stop()
 
@@ -448,10 +464,10 @@ class TestGo2rtcHelperApiCalls:
         # Manually trigger cleanup of all streams
         await helper._cleanup_all_streams()
 
-        # Verify DELETE was called with correct URL
+        # Verify DELETE was called with correct URL (uses config URL)
         call_args = mock_aiohttp_session.delete.call_args
         url = call_args[0][0]
-        assert f"http://127.0.0.1:{GO2RTC_API_PORT}/api/streams" in url
+        assert "http://127.0.0.1:11984/api/streams" in url
 
         await helper.async_stop()
 
@@ -757,5 +773,150 @@ class TestGo2rtcHelperHostResolution:
             # IPv6 should be bracketed in the URL
             assert "[fd00::1]" in rtsp_url
             assert rtsp_url.startswith("rtsp://[fd00::1]:")
+
+        await helper.async_stop()
+
+
+class TestGo2rtcHelperExternalServer:
+    """Tests for external go2rtc server configuration."""
+
+    async def test_external_go2rtc_uses_configured_api_url(
+        self,
+        mock_hass_with_external_go2rtc: MagicMock,
+        mock_aiohttp_session: MagicMock,
+    ) -> None:
+        """Test that external go2rtc server URL is used for API calls."""
+        helper = Go2rtcHelper(mock_hass_with_external_go2rtc)
+
+        source_url = "http://example.com/stream.m3u8"
+        await helper.async_convert_stream(source_url)
+
+        # Verify PUT was called with external server URL
+        call_args = mock_aiohttp_session.put.call_args
+        url = call_args[0][0]
+        assert "http://frigate.example.com:1984/api/streams" in url
+
+        await helper.async_stop()
+
+    async def test_external_go2rtc_uses_external_rtsp_host(
+        self,
+        mock_hass_with_external_go2rtc: MagicMock,
+        mock_aiohttp_session: MagicMock,
+    ) -> None:
+        """Test that external go2rtc returns RTSP URL with external host."""
+        helper = Go2rtcHelper(mock_hass_with_external_go2rtc)
+
+        source_url = "http://example.com/stream.m3u8"
+        result = await helper.async_convert_stream(source_url)
+
+        assert result is not None
+        # Should use external host, not HA host
+        assert "frigate.example.com" in result
+        # External go2rtc uses standard port 8554
+        assert result.startswith("rtsp://frigate.example.com:8554/")
+        assert GO2RTC_STREAM_PREFIX in result
+
+        await helper.async_stop()
+
+    async def test_external_go2rtc_delete_uses_configured_url(
+        self,
+        mock_hass_with_external_go2rtc: MagicMock,
+        mock_aiohttp_session: MagicMock,
+    ) -> None:
+        """Test that stream deletion uses external go2rtc URL."""
+        helper = Go2rtcHelper(mock_hass_with_external_go2rtc)
+
+        # Add then remove a stream
+        await helper.async_convert_stream("http://example.com/stream.m3u8")
+        await helper._cleanup_all_streams()
+
+        # Verify DELETE was called with external server URL
+        call_args = mock_aiohttp_session.delete.call_args
+        url = call_args[0][0]
+        assert "http://frigate.example.com:1984/api/streams" in url
+
+        await helper.async_stop()
+
+    def test_get_go2rtc_config_external_server(
+        self,
+        mock_hass_with_external_go2rtc: MagicMock,
+    ) -> None:
+        """Test _get_go2rtc_config parses external server URL correctly."""
+        helper = Go2rtcHelper(mock_hass_with_external_go2rtc)
+
+        api_url, rtsp_host, rtsp_port = helper._get_go2rtc_config()
+
+        assert api_url == "http://frigate.example.com:1984"
+        assert rtsp_host == "frigate.example.com"
+        # External servers use standard go2rtc RTSP port
+        assert rtsp_port == 8554
+
+    def test_get_go2rtc_config_localhost(
+        self,
+        mock_hass_with_go2rtc: MagicMock,
+    ) -> None:
+        """Test _get_go2rtc_config uses HA-managed ports for localhost."""
+        helper = Go2rtcHelper(mock_hass_with_go2rtc)
+
+        api_url, rtsp_host, rtsp_port = helper._get_go2rtc_config()
+
+        assert api_url == "http://127.0.0.1:11984"
+        assert rtsp_host == "127.0.0.1"
+        # HA-managed uses port 18554
+        assert rtsp_port == GO2RTC_DEFAULT_RTSP_PORT
+
+    def test_get_go2rtc_config_fallback_without_go2rtc(
+        self,
+        mock_hass_without_go2rtc: MagicMock,
+    ) -> None:
+        """Test _get_go2rtc_config falls back to defaults when go2rtc unavailable."""
+        helper = Go2rtcHelper(mock_hass_without_go2rtc)
+
+        api_url, rtsp_host, rtsp_port = helper._get_go2rtc_config()
+
+        assert api_url == GO2RTC_DEFAULT_API_URL
+        assert rtsp_host == "127.0.0.1"
+        assert rtsp_port == GO2RTC_DEFAULT_RTSP_PORT
+
+    def test_get_go2rtc_config_caches_values(
+        self,
+        mock_hass_with_external_go2rtc: MagicMock,
+    ) -> None:
+        """Test _get_go2rtc_config caches values after first call."""
+        helper = Go2rtcHelper(mock_hass_with_external_go2rtc)
+
+        # First call
+        api_url1, rtsp_host1, rtsp_port1 = helper._get_go2rtc_config()
+
+        # Modify the mock to verify caching works
+        mock_hass_with_external_go2rtc.data[GO2RTC_DOMAIN].url = "http://changed.com:9999"
+
+        # Second call should return cached values
+        api_url2, rtsp_host2, rtsp_port2 = helper._get_go2rtc_config()
+
+        assert api_url1 == api_url2
+        assert rtsp_host1 == rtsp_host2
+        assert rtsp_port1 == rtsp_port2
+
+    async def test_external_go2rtc_does_not_use_ha_host_for_rtsp(
+        self,
+        mock_hass_with_external_go2rtc: MagicMock,
+        mock_aiohttp_session: MagicMock,
+    ) -> None:
+        """Test external go2rtc doesn't try to use HA's internal URL for RTSP."""
+        helper = Go2rtcHelper(mock_hass_with_external_go2rtc)
+
+        # Even if get_url returns HA's internal address, RTSP should use external host
+        with patch(
+            "custom_components.zowietek.go2rtc_helper.get_url",
+            return_value="http://192.168.1.100:8123",
+        ):
+            rtsp_url = await helper.async_convert_stream("http://example.com/stream.m3u8")
+
+            assert rtsp_url is not None
+            # Should NOT contain HA's IP
+            assert "192.168.1.100" not in rtsp_url
+            # Should contain external go2rtc host
+            assert "frigate.example.com" in rtsp_url
 
         await helper.async_stop()

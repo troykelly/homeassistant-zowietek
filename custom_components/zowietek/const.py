@@ -25,9 +25,12 @@ MAX_SCAN_INTERVAL = 300
 CONF_USE_GO2RTC = "use_go2rtc"
 DEFAULT_USE_GO2RTC = True
 
-# go2rtc ports (Home Assistant managed instance)
-GO2RTC_API_PORT = 11984
-GO2RTC_RTSP_PORT = 18554
+# go2rtc domain for accessing HA's go2rtc integration data
+GO2RTC_DOMAIN = "go2rtc"
+
+# Default go2rtc settings (HA-managed instance fallbacks)
+GO2RTC_DEFAULT_API_URL = "http://127.0.0.1:11984"
+GO2RTC_DEFAULT_RTSP_PORT = 18554  # HA-managed uses 18554, external typically 8554
 
 # go2rtc stream management
 GO2RTC_STREAM_PREFIX = "zowietek_"

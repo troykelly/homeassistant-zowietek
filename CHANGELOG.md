@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2024-12-03
+
+### Fixed
+- go2rtc load order ensuring proper initialization before use (#64, #65)
+- go2rtc error handling improvements for better reliability
+- Removed dead HTTP stream type code for 100% test coverage
+
+### Changed
+- Refactored media_player with go2rtc helper methods for cleaner code
+- Improved error messages for go2rtc-related failures
+
 ## [0.2.0] - 2024-12-03
 
 ### Added
@@ -73,6 +84,7 @@ Initial release of the Zowietek integration for Home Assistant.
 - Strict type checking with mypy
 - TypedDict definitions for all API responses
 
-[Unreleased]: https://github.com/troykelly/homeassistant-zowietek/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/troykelly/homeassistant-zowietek/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/troykelly/homeassistant-zowietek/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/troykelly/homeassistant-zowietek/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/troykelly/homeassistant-zowietek/releases/tag/v0.1.0

@@ -2130,6 +2130,42 @@ class TestStreamplayInfoEdgeCases:
         assert result["streamplay"] == []
 
 
+class TestStreamplaySourceControl:
+    """Test streamplay source control methods."""
+
+    @pytest.mark.asyncio
+    async def test_async_disable_streamplay_source_success(self) -> None:
+        """Test async_disable_streamplay_source sends correct request."""
+        mock_response = _create_mock_response(
+            {
+                "status": "00000",
+                "rsp": "succeed",
+            }
+        )
+        mock_session = _create_mock_session(mock_response)
+
+        client = ZowietekClient(
+            host="192.168.1.100",
+            username="admin",
+            password="admin",
+            session=mock_session,
+        )
+
+        await client.async_disable_streamplay_source(3)
+
+        # Verify the request was made with correct parameters
+        mock_session.post.assert_called_once()
+        call_args = mock_session.post.call_args
+        assert "/streamplay?option=setinfo" in call_args[0][0]
+
+        # Check the JSON body (already a dict, not a string)
+        body = call_args[1]["json"]
+        assert body["group"] == "streamplay"
+        assert body["opt"] == "streamplay_switch"
+        assert body["data"]["index"] == 3
+        assert body["data"]["switch"] == 0
+
+
 class TestNdiSourcesEdgeCases:
     """Test edge cases in NDI sources retrieval."""
 

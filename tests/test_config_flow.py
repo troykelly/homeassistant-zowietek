@@ -1373,6 +1373,132 @@ async def test_options_flow_handler_registered(
     assert callable(getattr(ZowietekConfigFlow, "async_get_options_flow", None))
 
 
+async def test_options_flow_has_use_go2rtc_field(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+) -> None:
+    """Test that options flow form has use_go2rtc field."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.zowietek.const import CONF_USE_GO2RTC
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="ZBOX-ABC123",
+        title="ZowieBox-Office",
+        data={
+            CONF_HOST: "192.168.1.100",
+            CONF_USERNAME: "admin",
+            CONF_PASSWORD: "admin",
+        },
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+
+    assert result["type"] is FlowResultType.FORM
+    # Verify schema includes use_go2rtc field
+    schema_keys = list(result["data_schema"].schema.keys())
+    schema_key_names = [str(k) for k in schema_keys]
+    assert CONF_USE_GO2RTC in schema_key_names
+
+
+async def test_options_flow_default_use_go2rtc(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+) -> None:
+    """Test that options flow shows default use_go2rtc value."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.zowietek.const import CONF_USE_GO2RTC, DEFAULT_USE_GO2RTC
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="ZBOX-ABC123",
+        title="ZowieBox-Office",
+        data={
+            CONF_HOST: "192.168.1.100",
+            CONF_USERNAME: "admin",
+            CONF_PASSWORD: "admin",
+        },
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+
+    assert result["type"] is FlowResultType.FORM
+    # Check that the use_go2rtc field has the correct default
+    schema = result["data_schema"]
+    for key in schema.schema:
+        if str(key) == CONF_USE_GO2RTC and hasattr(key, "default"):
+            default_val = key.default()
+            assert default_val == DEFAULT_USE_GO2RTC
+            break
+
+
+async def test_options_flow_saves_use_go2rtc(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+) -> None:
+    """Test that options flow saves use_go2rtc to entry.options."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.zowietek.const import CONF_SCAN_INTERVAL, CONF_USE_GO2RTC
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="ZBOX-ABC123",
+        title="ZowieBox-Office",
+        data={
+            CONF_HOST: "192.168.1.100",
+            CONF_USERNAME: "admin",
+            CONF_PASSWORD: "admin",
+        },
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={CONF_SCAN_INTERVAL: 30, CONF_USE_GO2RTC: False},
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options[CONF_USE_GO2RTC] is False
+
+
+async def test_options_flow_preserves_existing_use_go2rtc(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+) -> None:
+    """Test that options flow uses existing use_go2rtc value as default."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.zowietek.const import CONF_SCAN_INTERVAL, CONF_USE_GO2RTC
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="ZBOX-ABC123",
+        title="ZowieBox-Office",
+        data={
+            CONF_HOST: "192.168.1.100",
+            CONF_USERNAME: "admin",
+            CONF_PASSWORD: "admin",
+        },
+        options={CONF_SCAN_INTERVAL: 30, CONF_USE_GO2RTC: False},
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+
+    assert result["type"] is FlowResultType.FORM
+    # Find the key and check its default reflects existing value (False)
+    for key in result["data_schema"].schema:
+        if str(key) == CONF_USE_GO2RTC and hasattr(key, "default") and callable(key.default):
+            assert key.default() is False
+
+
 # =============================================================================
 # Reconfigure Flow Tests
 # =============================================================================

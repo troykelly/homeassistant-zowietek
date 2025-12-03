@@ -18,8 +18,10 @@ from homeassistant.core import callback
 from .api import ZowietekClient
 from .const import (
     CONF_SCAN_INTERVAL,
+    CONF_USE_GO2RTC,
     DEFAULT_PASSWORD,
     DEFAULT_SCAN_INTERVAL,
+    DEFAULT_USE_GO2RTC,
     DEFAULT_USERNAME,
     DOMAIN,
     MAX_SCAN_INTERVAL,
@@ -606,10 +608,11 @@ class ZowietekOptionsFlow(OptionsFlow):
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
-        # Get current value or default
+        # Get current values or defaults
         current_scan_interval = self._config_entry.options.get(
             CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
         )
+        current_use_go2rtc = self._config_entry.options.get(CONF_USE_GO2RTC, DEFAULT_USE_GO2RTC)
 
         return self.async_show_form(
             step_id="init",
@@ -622,6 +625,10 @@ class ZowietekOptionsFlow(OptionsFlow):
                         vol.Coerce(int),
                         vol.Range(min=MIN_SCAN_INTERVAL, max=MAX_SCAN_INTERVAL),
                     ),
+                    vol.Required(
+                        CONF_USE_GO2RTC,
+                        default=current_use_go2rtc,
+                    ): bool,
                 }
             ),
         )

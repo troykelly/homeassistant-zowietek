@@ -20,8 +20,10 @@ import aiohttp
 from homeassistant.helpers.network import NoURLAvailableError, get_url
 
 from .const import (
-    GO2RTC_API_PORT,
-    GO2RTC_RTSP_PORT,
+    GO2RTC_DEFAULT_API_URL,
+    GO2RTC_DEFAULT_RTSP_PORT,
+    GO2RTC_DOMAIN,
+    GO2RTC_EXTERNAL_RTSP_PORT,
     GO2RTC_STREAM_PREFIX,
     GO2RTC_STREAM_TTL,
 )
@@ -69,6 +71,9 @@ class Go2rtcHelper:
         self._streams: dict[str, ManagedStream] = {}
         self._cleanup_task: asyncio.Task[None] | None = None
         self._session: aiohttp.ClientSession | None = None
+        self._api_url: str | None = None
+        self._rtsp_host: str | None = None
+        self._rtsp_port: int = GO2RTC_DEFAULT_RTSP_PORT
 
     @property
     def is_available(self) -> bool:
@@ -77,7 +82,56 @@ class Go2rtcHelper:
         Returns:
             True if go2rtc integration is loaded, False otherwise.
         """
-        return "go2rtc" in self._hass.data
+        return GO2RTC_DOMAIN in self._hass.data
+
+    def _get_go2rtc_config(self) -> tuple[str, str, int]:
+        """Get the go2rtc API URL and RTSP host/port from Home Assistant config.
+
+        Reads the go2rtc configuration from hass.data if available.
+        Falls back to default localhost values if not configured.
+
+        Returns:
+            Tuple of (api_url, rtsp_host, rtsp_port).
+        """
+        # Check if we have cached values
+        if self._api_url is not None and self._rtsp_host is not None:
+            _LOGGER.debug("Using cached go2rtc config: %s", self._api_url)
+            return self._api_url, self._rtsp_host, self._rtsp_port
+
+        # Try to get the go2rtc config from Home Assistant's data store
+        # The go2rtc integration stores a Go2RtcConfig dataclass with url and session
+        go2rtc_data = self._hass.data.get(GO2RTC_DOMAIN)
+
+        if go2rtc_data is not None and hasattr(go2rtc_data, "url"):
+            # User has configured go2rtc (possibly external server)
+            configured_url = go2rtc_data.url
+            _LOGGER.debug("Using go2rtc URL from HA config: %s", configured_url)
+
+            # Parse the URL to extract host for RTSP
+            parsed = urlparse(configured_url)
+            api_url = configured_url.rstrip("/")
+            rtsp_host = parsed.hostname or "127.0.0.1"
+
+            # For external go2rtc servers, RTSP port is typically 8554 (standard)
+            # For HA-managed go2rtc, RTSP port is 18554
+            # We check if this is localhost (HA-managed) or external
+            if rtsp_host in ("127.0.0.1", "localhost", "::1"):
+                rtsp_port = GO2RTC_DEFAULT_RTSP_PORT  # 18554 for HA-managed
+            else:
+                # External server - use standard go2rtc RTSP port
+                rtsp_port = GO2RTC_EXTERNAL_RTSP_PORT
+
+            self._api_url = api_url
+            self._rtsp_host = rtsp_host
+            self._rtsp_port = rtsp_port
+            return api_url, rtsp_host, rtsp_port
+
+        # Fall back to default HA-managed localhost values
+        _LOGGER.debug("Using default go2rtc localhost URL")
+        self._api_url = GO2RTC_DEFAULT_API_URL
+        self._rtsp_host = "127.0.0.1"
+        self._rtsp_port = GO2RTC_DEFAULT_RTSP_PORT
+        return self._api_url, self._rtsp_host, self._rtsp_port
 
     def _get_ha_host(self) -> str:
         """Get the Home Assistant host address for external access.
@@ -172,14 +226,26 @@ class Go2rtcHelper:
             _LOGGER.debug("Reusing cached stream: %s", stream_name)
             return self._streams[stream_name].rtsp_url
 
+        # Get go2rtc configuration (API URL and RTSP host/port)
+        _, rtsp_host, rtsp_port = self._get_go2rtc_config()
+
         # Add stream to go2rtc
         try:
             await self._add_stream(stream_name, source_url)
-            # Use HA's actual host address so ZowieBox can connect over network
-            ha_host = self._get_ha_host()
+
+            # Determine the RTSP host for the ZowieBox to connect to
+            # For external go2rtc servers, use the configured host directly
+            # For localhost (HA-managed), use HA's network-accessible address
+            if rtsp_host in ("127.0.0.1", "localhost", "::1"):
+                # HA-managed go2rtc - use HA's actual host address
+                rtsp_connect_host = self._get_ha_host()
+            else:
+                # External go2rtc server - use the configured host
+                rtsp_connect_host = rtsp_host
+
             # Format host for URL (handles IPv6 addresses)
-            formatted_host = self._format_host_for_url(ha_host)
-            rtsp_url = f"rtsp://{formatted_host}:{GO2RTC_RTSP_PORT}/{stream_name}"
+            formatted_host = self._format_host_for_url(rtsp_connect_host)
+            rtsp_url = f"rtsp://{formatted_host}:{rtsp_port}/{stream_name}"
 
             self._streams[stream_name] = ManagedStream(
                 name=stream_name,
@@ -232,7 +298,8 @@ class Go2rtcHelper:
         if self._session is None:
             self._session = aiohttp.ClientSession()
 
-        url = f"http://127.0.0.1:{GO2RTC_API_PORT}/api/streams"
+        api_url, _, _ = self._get_go2rtc_config()
+        url = f"{api_url}/api/streams"
 
         async with self._session.put(
             url,
@@ -252,7 +319,8 @@ class Go2rtcHelper:
         if self._session is None:
             return
 
-        url = f"http://127.0.0.1:{GO2RTC_API_PORT}/api/streams"
+        api_url, _, _ = self._get_go2rtc_config()
+        url = f"{api_url}/api/streams"
 
         try:
             async with self._session.delete(

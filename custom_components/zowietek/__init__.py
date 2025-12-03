@@ -8,8 +8,9 @@ from typing import TYPE_CHECKING
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 
-from .const import DOMAIN
+from .const import CONF_USE_GO2RTC, DEFAULT_USE_GO2RTC, DOMAIN
 from .coordinator import ZowietekCoordinator
+from .go2rtc_helper import Go2rtcHelper
 from .services import async_setup_services, async_unload_services
 
 if TYPE_CHECKING:
@@ -62,6 +63,25 @@ async def async_setup_entry(
 
     # Register cleanup callback
     entry.async_on_unload(coordinator.client.close)
+
+    # Initialize go2rtc helper if enabled
+    use_go2rtc = entry.options.get(CONF_USE_GO2RTC, DEFAULT_USE_GO2RTC)
+    if use_go2rtc:
+        go2rtc_helper = Go2rtcHelper(hass)
+        if go2rtc_helper.is_available:
+            await go2rtc_helper.async_start()
+            coordinator.go2rtc_helper = go2rtc_helper
+            coordinator.go2rtc_enabled = True
+            entry.async_on_unload(go2rtc_helper.async_stop)
+            _LOGGER.debug("go2rtc integration enabled for %s", entry.title)
+        else:
+            _LOGGER.debug(
+                "go2rtc requested but not available in Home Assistant for %s",
+                entry.title,
+            )
+            coordinator.go2rtc_enabled = False
+    else:
+        coordinator.go2rtc_enabled = False
 
     # Register services if this is the first entry
     if not _async_has_other_entries(hass, entry):

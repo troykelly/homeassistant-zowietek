@@ -380,3 +380,65 @@ class TestPlatforms:
 
         for platform in expected_platforms:
             assert platform in PLATFORMS, f"Missing platform: {platform}"
+
+
+class TestGo2rtcIntegration:
+    """Tests for go2rtc integration in async_setup_entry."""
+
+    async def test_setup_entry_with_go2rtc_available(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test setup with go2rtc available initializes the helper."""
+        mock_config_entry.add_to_hass(hass)
+
+        # Simulate go2rtc being available
+        hass.data["go2rtc"] = {}
+
+        with patch("custom_components.zowietek.Go2rtcHelper") as mock_helper_class:
+            mock_helper = MagicMock()
+            mock_helper.is_available = True
+            mock_helper.async_start = AsyncMock()
+            mock_helper.async_stop = AsyncMock()
+            mock_helper_class.return_value = mock_helper
+
+            await hass.config_entries.async_setup(mock_config_entry.entry_id)
+            await hass.async_block_till_done()
+
+            # Verify go2rtc helper was started
+            mock_helper.async_start.assert_called_once()
+            coordinator = mock_config_entry.runtime_data
+            assert coordinator.go2rtc_enabled is True
+
+    async def test_setup_entry_with_go2rtc_disabled_in_options(
+        self,
+        hass: HomeAssistant,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test setup with go2rtc disabled via options."""
+        from custom_components.zowietek.const import CONF_USE_GO2RTC
+
+        # Create entry with go2rtc disabled
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            title="Test ZowieBox",
+            data={
+                CONF_HOST: "192.168.1.100",
+                CONF_USERNAME: "admin",
+                CONF_PASSWORD: "admin",
+            },
+            options={CONF_USE_GO2RTC: False},
+            unique_id="zowiebox-go2rtc-disabled",
+            version=1,
+        )
+        entry.add_to_hass(hass)
+
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        # go2rtc should be disabled
+        coordinator = entry.runtime_data
+        assert coordinator.go2rtc_enabled is False
+        assert coordinator.go2rtc_helper is None

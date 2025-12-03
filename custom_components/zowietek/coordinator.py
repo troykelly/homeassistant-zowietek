@@ -15,7 +15,13 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import ZowietekClient
-from .const import CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL, DOMAIN
+from .const import (
+    CONF_SCAN_INTERVAL,
+    CONF_USE_GO2RTC,
+    DEFAULT_SCAN_INTERVAL,
+    DEFAULT_USE_GO2RTC,
+    DOMAIN,
+)
 from .device_trigger import EVENT_TYPE
 from .exceptions import (
     ZowietekAuthError,
@@ -25,7 +31,7 @@ from .exceptions import (
 from .models import ZowietekData
 
 if TYPE_CHECKING:
-    pass
+    from .go2rtc_helper import Go2rtcHelper
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -76,6 +82,9 @@ class ZowietekCoordinator(DataUpdateCoordinator[ZowietekData]):
         # Track previous state for device trigger events
         self._prev_streaming: bool | None = None
         self._prev_video_input: bool | None = None
+        # go2rtc integration (initialized by async_setup_entry)
+        self.go2rtc_helper: Go2rtcHelper | None = None
+        self.go2rtc_enabled: bool = entry.options.get(CONF_USE_GO2RTC, DEFAULT_USE_GO2RTC)
 
     @property
     def consecutive_failures(self) -> int:

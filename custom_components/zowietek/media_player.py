@@ -7,6 +7,7 @@ It allows selecting and playing stream sources, including RTSP, RTMP, SRT, and N
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.media_player import (
@@ -27,11 +28,28 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
+
+@dataclass
+class SourceInfo:
+    """Information about a streamplay source."""
+
+    index: int
+    name: str
+    url: str
+    is_active: bool  # switch == 1
+
+
 # Prefix for NDI sources in the source list
 NDI_SOURCE_PREFIX = "NDI: "
 
 # Name for the Home Assistant managed source (used for play_media)
 HA_SOURCE_NAME = "Home Assistant"
+
+# Stream protocols that ZowieBox can handle natively (no conversion needed)
+NATIVE_PROTOCOLS = ("rtsp://", "rtmp://", "srt://")
+
+# Streaming manifest extensions that need go2rtc conversion
+STREAMING_MANIFEST_EXTENSIONS = (".m3u8", ".mpd")
 
 
 class ZowietekMediaPlayer(ZowietekEntity, MediaPlayerEntity):
@@ -278,50 +296,98 @@ class ZowietekMediaPlayer(ZowietekEntity, MediaPlayerEntity):
 
             await self.coordinator.async_request_refresh()
 
+    def _get_streamplay_list(self) -> list[dict[str, Any]]:
+        """Get the list of streamplay sources.
+
+        Returns:
+            List of source dictionaries, or empty list if unavailable.
+        """
+        if self.coordinator.data is None:
+            return []
+
+        streamplay_data = self.coordinator.data.streamplay
+        streamplay_list = streamplay_data.get("sources", [])
+        if not isinstance(streamplay_list, list):
+            return []
+        return streamplay_list
+
+    def _find_ha_source(self) -> SourceInfo | None:
+        """Find the Home Assistant managed source.
+
+        Returns:
+            SourceInfo for the HA source, or None if not found.
+        """
+        for entry in self._get_streamplay_list():
+            if isinstance(entry, dict) and entry.get("name") == HA_SOURCE_NAME:
+                index = entry.get("index")
+                if index is not None:
+                    return SourceInfo(
+                        index=int(index),
+                        name=str(entry.get("name", "")),
+                        url=str(entry.get("url", "")),
+                        is_active=entry.get("switch") == 1,
+                    )
+        return None
+
     def _find_ha_source_index(self) -> int | None:
         """Find the index of the Home Assistant managed source.
 
         Returns:
             The index of the HA source, or None if not found.
         """
-        if self.coordinator.data is None:
-            return None
+        source = self._find_ha_source()
+        return source.index if source else None
 
-        streamplay_data = self.coordinator.data.streamplay
-        streamplay_list = streamplay_data.get("sources", [])
-        if not isinstance(streamplay_list, list):
-            return None
-
-        for entry in streamplay_list:
-            if isinstance(entry, dict) and entry.get("name") == HA_SOURCE_NAME:
-                index = entry.get("index")
-                if index is not None:
-                    return int(index)
-        return None
-
-    def _find_source_by_url(self, url: str) -> int | None:
-        """Find the index of a source by its URL.
+    def _find_source_by_url(self, url: str) -> SourceInfo | None:
+        """Find a source by its URL.
 
         Args:
             url: The URL to search for.
 
         Returns:
-            The index of the source with matching URL, or None if not found.
+            SourceInfo for the matching source, or None if not found.
         """
-        if self.coordinator.data is None:
-            return None
-
-        streamplay_data = self.coordinator.data.streamplay
-        streamplay_list = streamplay_data.get("sources", [])
-        if not isinstance(streamplay_list, list):
-            return None
-
-        for entry in streamplay_list:
+        for entry in self._get_streamplay_list():
             if isinstance(entry, dict) and entry.get("url") == url:
                 index = entry.get("index")
                 if index is not None:
-                    return int(index)
+                    return SourceInfo(
+                        index=int(index),
+                        name=str(entry.get("name", "")),
+                        url=str(entry.get("url", "")),
+                        is_active=entry.get("switch") == 1,
+                    )
         return None
+
+    def _needs_go2rtc_conversion(self, url: str) -> bool:
+        """Determine if a URL needs conversion via go2rtc.
+
+        Args:
+            url: The media URL to check.
+
+        Returns:
+            True if the URL needs go2rtc conversion, False if ZowieBox can handle it natively.
+        """
+        url_lower = url.lower()
+
+        # Camera entity reference - always needs conversion
+        if url.startswith("camera."):
+            return True
+
+        # Already compatible protocols - no conversion needed
+        if any(url_lower.startswith(proto) for proto in NATIVE_PROTOCOLS):
+            return False
+
+        # HTTP/HTTPS URLs need evaluation
+        if url_lower.startswith(("http://", "https://")):
+            # HLS/DASH manifests need conversion
+            if any(url_lower.endswith(ext) for ext in STREAMING_MANIFEST_EXTENSIONS):
+                return True
+            # Plain HTTP streams - ZowieBox can handle directly
+            return False
+
+        # Unknown protocol - try conversion if go2rtc available
+        return True
 
     async def async_play_media(
         self,
@@ -329,65 +395,143 @@ class ZowietekMediaPlayer(ZowietekEntity, MediaPlayerEntity):
         media_id: str,
         **kwargs: Any,
     ) -> None:
-        """Play a media URL.
+        """Play a media URL or camera entity.
 
-        First checks if the URL already exists as a configured source and switches
-        to it if found. Otherwise, uses a dedicated "Home Assistant" source that
-        gets created once and reused for subsequent play_media calls to avoid
-        accumulating sources.
+        The ZowieBox streamplay model requires proper lifecycle management:
+        - If a source is already active (switch=1), it must be turned OFF first,
+          then the URL updated (if needed), then turned back ON to force a reload.
+        - If a source exists but is OFF, just update the URL and turn it ON.
+
+        For camera entities and HLS/DASH streams, uses go2rtc to convert the stream
+        to RTSP if available and enabled.
 
         Args:
-            media_type: The type of media (e.g., "url").
-            media_id: The URL to play.
+            media_type: The type of media (e.g., "url", "camera").
+            media_id: The URL or camera entity ID to play.
             kwargs: Additional arguments (extra.title is ignored, we use HA_SOURCE_NAME).
 
         Raises:
             HomeAssistantError: If the media cannot be played.
         """
+        url_to_play = media_id
+
+        # Handle camera entity type or camera.* media_id
+        is_camera = media_type == "camera" or media_id.startswith("camera.")
+
+        if is_camera:
+            # Camera entities always require go2rtc conversion
+            entity_id = media_id
+            go2rtc_helper = getattr(self.coordinator, "go2rtc_helper", None)
+            go2rtc_enabled = getattr(self.coordinator, "go2rtc_enabled", False)
+
+            if not go2rtc_enabled or go2rtc_helper is None:
+                raise HomeAssistantError(
+                    f"go2rtc is required to play camera entities. "
+                    f"Please ensure go2rtc is available and enabled. "
+                    f"Camera: {entity_id}"
+                )
+
+            converted_url = await go2rtc_helper.async_convert_camera(entity_id)
+            if converted_url is None:
+                raise HomeAssistantError(f"Failed to convert camera entity via go2rtc: {entity_id}")
+            url_to_play = converted_url
+
+        elif self._needs_go2rtc_conversion(media_id):
+            # URL needs conversion (HLS, DASH, etc.)
+            go2rtc_helper = getattr(self.coordinator, "go2rtc_helper", None)
+            go2rtc_enabled = getattr(self.coordinator, "go2rtc_enabled", False)
+
+            if go2rtc_enabled and go2rtc_helper is not None:
+                converted_url = await go2rtc_helper.async_convert_stream(media_id)
+                if converted_url is not None:
+                    url_to_play = converted_url
+                    _LOGGER.debug("Converted stream via go2rtc: %s -> %s", media_id, url_to_play)
+                else:
+                    _LOGGER.warning(
+                        "go2rtc conversion failed for %s, attempting direct play",
+                        media_id,
+                    )
+            else:
+                _LOGGER.debug(
+                    "go2rtc not available/enabled, attempting direct play for %s",
+                    media_id,
+                )
+
         try:
-            # First, check if this URL already exists as a configured source
-            existing_source_index = self._find_source_by_url(media_id)
-            if existing_source_index is not None:
-                # Just switch to the existing source
-                await self.coordinator.client.async_select_streamplay_source(existing_source_index)
+            # Check if this URL already exists as a configured source
+            existing_source = self._find_source_by_url(url_to_play)
+            if existing_source is not None:
+                # URL already exists as a source
+                if existing_source.is_active:
+                    # Source is already ON - turn OFF then ON to force reload
+                    _LOGGER.debug(
+                        "Source %s is active, cycling off/on to reload",
+                        existing_source.name,
+                    )
+                    await self.coordinator.client.async_disable_streamplay_source(
+                        existing_source.index
+                    )
+                # Turn the source ON (whether it was already on or not)
+                await self.coordinator.client.async_select_streamplay_source(existing_source.index)
                 await self.coordinator.async_request_refresh()
                 return
 
+            # URL doesn't match any existing source - use HA managed source
             # Determine stream type from URL
-            streamtype = 1  # Default to RTSP
-            url_lower = media_id.lower()
-            if url_lower.startswith("rtmp://"):
-                streamtype = 2
-            elif url_lower.startswith("srt://"):
-                streamtype = 3
-            elif url_lower.startswith("http://") or url_lower.startswith("https://"):
-                streamtype = 4
+            streamtype = self._get_stream_type(url_to_play)
 
             # Check if we already have a "Home Assistant" source
-            ha_source_index = self._find_ha_source_index()
+            ha_source = self._find_ha_source()
 
-            if ha_source_index is not None:
-                # Update existing source with new URL and activate it
+            if ha_source is not None:
+                # HA source exists - need to handle properly
+                if ha_source.is_active:
+                    # Source is ON - turn OFF first, then update, then turn ON
+                    _LOGGER.debug("HA source is active, turning off before update")
+                    await self.coordinator.client.async_disable_streamplay_source(ha_source.index)
+
+                # Update the URL (switch=False, we'll turn on explicitly after)
                 await self.coordinator.client.async_modify_decoding_url(
-                    index=ha_source_index,
+                    index=ha_source.index,
                     name=HA_SOURCE_NAME,
-                    url=media_id,
+                    url=url_to_play,
                     streamtype=streamtype,
-                    switch=True,
+                    switch=False,
                 )
+                # Now turn it ON
+                await self.coordinator.client.async_select_streamplay_source(ha_source.index)
             else:
-                # Create new "Home Assistant" source
+                # Create new "Home Assistant" source (created with switch=1)
                 await self.coordinator.client.async_add_decoding_url(
                     name=HA_SOURCE_NAME,
-                    url=media_id,
+                    url=url_to_play,
                     streamtype=streamtype,
                     switch=True,
                 )
         except ZowietekApiError as err:
-            _LOGGER.error("Failed to play media %s: %s", media_id, err)
+            _LOGGER.error("Failed to play media %s: %s", url_to_play, err)
             raise HomeAssistantError(f"Failed to play media: {err}") from err
 
         await self.coordinator.async_request_refresh()
+
+    def _get_stream_type(self, url: str) -> int:
+        """Determine the ZowieBox stream type from a URL.
+
+        Args:
+            url: The stream URL.
+
+        Returns:
+            Stream type integer (1=RTSP, 2=RTMP, 3=SRT, 4=HTTP).
+        """
+        url_lower = url.lower()
+        if url_lower.startswith("rtmp://"):
+            return 2
+        if url_lower.startswith("srt://"):
+            return 3
+        if url_lower.startswith(("http://", "https://")):
+            return 4
+        # Default to RTSP
+        return 1
 
     async def async_turn_off(self) -> None:
         """Put the device into standby mode.

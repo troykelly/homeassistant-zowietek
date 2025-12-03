@@ -26,6 +26,8 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+    from .go2rtc_helper import Go2rtcHelper
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -387,6 +389,27 @@ class ZowietekMediaPlayer(ZowietekEntity, MediaPlayerEntity):
         # Unknown protocol - try conversion if go2rtc available
         return True
 
+    def _is_go2rtc_available(self) -> bool:
+        """Check if go2rtc is available and enabled.
+
+        Returns:
+            True if go2rtc helper is available and enabled, False otherwise.
+        """
+        return (
+            getattr(self.coordinator, "go2rtc_enabled", False)
+            and getattr(self.coordinator, "go2rtc_helper", None) is not None
+        )
+
+    def _get_go2rtc_helper(self) -> Go2rtcHelper | None:
+        """Get the go2rtc helper if available.
+
+        Returns:
+            The go2rtc helper instance, or None if not available.
+        """
+        if not self._is_go2rtc_available():
+            return None
+        return getattr(self.coordinator, "go2rtc_helper", None)
+
     async def async_play_media(
         self,
         media_type: str,
@@ -419,28 +442,30 @@ class ZowietekMediaPlayer(ZowietekEntity, MediaPlayerEntity):
         if is_camera:
             # Camera entities always require go2rtc conversion
             entity_id = media_id
-            go2rtc_helper = getattr(self.coordinator, "go2rtc_helper", None)
-            go2rtc_enabled = getattr(self.coordinator, "go2rtc_enabled", False)
+            go2rtc_helper = self._get_go2rtc_helper()
 
-            if not go2rtc_enabled or go2rtc_helper is None:
+            if go2rtc_helper is None:
                 raise HomeAssistantError(
                     f"go2rtc is required to play camera entities. "
-                    f"Please ensure go2rtc is available and enabled. "
+                    f"Please ensure go2rtc is available and enabled in the integration options. "
+                    f"See: https://www.home-assistant.io/integrations/go2rtc/ "
                     f"Camera: {entity_id}"
                 )
 
             converted_url = await go2rtc_helper.async_convert_camera(entity_id)
             if converted_url is None:
-                raise HomeAssistantError(f"Failed to convert camera entity via go2rtc: {entity_id}")
+                raise HomeAssistantError(
+                    f"Failed to convert camera entity via go2rtc: {entity_id}. "
+                    f"Check go2rtc logs for details."
+                )
             url_to_play = converted_url
 
         elif self._needs_go2rtc_conversion(media_id):
             # URL needs conversion (HTTP/HTTPS URLs require go2rtc)
             # ZowieBox only natively supports RTSP, RTMP, and SRT protocols
-            go2rtc_helper = getattr(self.coordinator, "go2rtc_helper", None)
-            go2rtc_enabled = getattr(self.coordinator, "go2rtc_enabled", False)
+            go2rtc_helper = self._get_go2rtc_helper()
 
-            if go2rtc_enabled and go2rtc_helper is not None:
+            if go2rtc_helper is not None:
                 converted_url = await go2rtc_helper.async_convert_stream(media_id)
                 if converted_url is not None:
                     url_to_play = converted_url
@@ -448,12 +473,14 @@ class ZowietekMediaPlayer(ZowietekEntity, MediaPlayerEntity):
                 else:
                     raise HomeAssistantError(
                         f"go2rtc conversion failed for {media_id}. "
-                        f"ZowieBox cannot play HTTP URLs directly."
+                        f"ZowieBox cannot play HTTP URLs directly. "
+                        f"Check go2rtc logs for details."
                     )
             else:
                 raise HomeAssistantError(
                     f"go2rtc is required to play HTTP URLs but is not available. "
-                    f"Please ensure go2rtc is installed and the integration is enabled. "
+                    f"Please ensure go2rtc is installed and enabled in the integration options. "
+                    f"See: https://www.home-assistant.io/integrations/go2rtc/ "
                     f"URL: {media_id}"
                 )
 

@@ -1733,6 +1733,115 @@ class TestMediaPlayerTurnOn:
 class TestMediaPlayerGo2rtcConversion:
     """Tests for go2rtc stream conversion in media player."""
 
+    async def test_is_go2rtc_available_returns_true_when_enabled(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test _is_go2rtc_available returns True when go2rtc is enabled and available."""
+        from custom_components.zowietek.media_player import ZowietekMediaPlayer
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+
+        # Set up go2rtc as available
+        mock_helper = MagicMock()
+        mock_helper.is_available = True
+        coordinator.go2rtc_helper = mock_helper
+        coordinator.go2rtc_enabled = True
+
+        media_player = ZowietekMediaPlayer(coordinator)
+
+        assert media_player._is_go2rtc_available() is True
+
+    async def test_is_go2rtc_available_returns_false_when_disabled(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test _is_go2rtc_available returns False when go2rtc is disabled."""
+        from custom_components.zowietek.media_player import ZowietekMediaPlayer
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+
+        # go2rtc helper exists but is disabled
+        mock_helper = MagicMock()
+        coordinator.go2rtc_helper = mock_helper
+        coordinator.go2rtc_enabled = False
+
+        media_player = ZowietekMediaPlayer(coordinator)
+
+        assert media_player._is_go2rtc_available() is False
+
+    async def test_is_go2rtc_available_returns_false_when_helper_missing(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test _is_go2rtc_available returns False when helper is None."""
+        from custom_components.zowietek.media_player import ZowietekMediaPlayer
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+
+        # go2rtc enabled but helper is None
+        coordinator.go2rtc_helper = None
+        coordinator.go2rtc_enabled = True
+
+        media_player = ZowietekMediaPlayer(coordinator)
+
+        assert media_player._is_go2rtc_available() is False
+
+    async def test_get_go2rtc_helper_returns_helper_when_available(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test _get_go2rtc_helper returns the helper when available."""
+        from custom_components.zowietek.media_player import ZowietekMediaPlayer
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+
+        # Set up go2rtc as available
+        mock_helper = MagicMock()
+        coordinator.go2rtc_helper = mock_helper
+        coordinator.go2rtc_enabled = True
+
+        media_player = ZowietekMediaPlayer(coordinator)
+
+        assert media_player._get_go2rtc_helper() is mock_helper
+
+    async def test_get_go2rtc_helper_returns_none_when_unavailable(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test _get_go2rtc_helper returns None when go2rtc is unavailable."""
+        from custom_components.zowietek.media_player import ZowietekMediaPlayer
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+
+        # go2rtc is not available
+        coordinator.go2rtc_helper = None
+        coordinator.go2rtc_enabled = False
+
+        media_player = ZowietekMediaPlayer(coordinator)
+
+        assert media_player._get_go2rtc_helper() is None
+
     async def test_needs_go2rtc_conversion_returns_false_for_rtsp(
         self,
         hass: HomeAssistant,

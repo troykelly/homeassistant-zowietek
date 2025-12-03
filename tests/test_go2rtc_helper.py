@@ -43,9 +43,15 @@ def mock_hass_without_go2rtc() -> MagicMock:
 @pytest.fixture
 def mock_aiohttp_session() -> Generator[MagicMock]:
     """Mock aiohttp ClientSession."""
-    with patch(
-        "custom_components.zowietek.go2rtc_helper.aiohttp.ClientSession"
-    ) as mock_session_class:
+    with (
+        patch(
+            "custom_components.zowietek.go2rtc_helper.aiohttp.ClientSession"
+        ) as mock_session_class,
+        patch(
+            "custom_components.zowietek.go2rtc_helper.get_url",
+            return_value="http://127.0.0.1:8123",
+        ),
+    ):
         mock_session = MagicMock()
         mock_session_class.return_value = mock_session
 
@@ -617,5 +623,73 @@ class TestGo2rtcHelperEdgeCases:
 
             # Verify cleanup was called (stream should be removed)
             assert len(helper._streams) == 0
+
+        await helper.async_stop()
+
+
+class TestGo2rtcHelperHostResolution:
+    """Tests for HA host address resolution."""
+
+    async def test_get_ha_host_returns_internal_url_host(
+        self,
+        mock_hass_with_go2rtc: MagicMock,
+    ) -> None:
+        """Test _get_ha_host returns hostname from internal URL."""
+        helper = Go2rtcHelper(mock_hass_with_go2rtc)
+
+        with patch(
+            "custom_components.zowietek.go2rtc_helper.get_url",
+            return_value="http://192.168.1.100:8123",
+        ):
+            host = helper._get_ha_host()
+            assert host == "192.168.1.100"
+
+    async def test_get_ha_host_handles_hostname(
+        self,
+        mock_hass_with_go2rtc: MagicMock,
+    ) -> None:
+        """Test _get_ha_host works with hostname instead of IP."""
+        helper = Go2rtcHelper(mock_hass_with_go2rtc)
+
+        with patch(
+            "custom_components.zowietek.go2rtc_helper.get_url",
+            return_value="http://homeassistant.local:8123",
+        ):
+            host = helper._get_ha_host()
+            assert host == "homeassistant.local"
+
+    async def test_get_ha_host_fallback_on_no_url(
+        self,
+        mock_hass_with_go2rtc: MagicMock,
+    ) -> None:
+        """Test _get_ha_host falls back to 127.0.0.1 when no URL available."""
+        from homeassistant.helpers.network import NoURLAvailableError
+
+        helper = Go2rtcHelper(mock_hass_with_go2rtc)
+
+        with patch(
+            "custom_components.zowietek.go2rtc_helper.get_url",
+            side_effect=NoURLAvailableError,
+        ):
+            host = helper._get_ha_host()
+            assert host == "127.0.0.1"
+
+    async def test_convert_stream_uses_ha_host(
+        self,
+        mock_hass_with_go2rtc: MagicMock,
+        mock_aiohttp_session: MagicMock,
+    ) -> None:
+        """Test async_convert_stream uses HA host in RTSP URL."""
+        helper = Go2rtcHelper(mock_hass_with_go2rtc)
+
+        with patch(
+            "custom_components.zowietek.go2rtc_helper.get_url",
+            return_value="http://192.168.1.50:8123",
+        ):
+            rtsp_url = await helper.async_convert_stream("http://example.com/stream.m3u8")
+
+            assert rtsp_url is not None
+            assert "192.168.1.50" in rtsp_url
+            assert rtsp_url.startswith("rtsp://192.168.1.50:")
 
         await helper.async_stop()

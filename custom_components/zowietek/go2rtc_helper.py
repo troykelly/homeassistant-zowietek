@@ -14,8 +14,10 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
+from urllib.parse import urlparse
 
 import aiohttp
+from homeassistant.helpers.network import NoURLAvailableError, get_url
 
 from .const import (
     GO2RTC_API_PORT,
@@ -77,6 +79,33 @@ class Go2rtcHelper:
         """
         return "go2rtc" in self._hass.data
 
+    def _get_ha_host(self) -> str:
+        """Get the Home Assistant host address for external access.
+
+        This is needed because the ZowieBox needs to connect to go2rtc
+        via the network, not localhost.
+
+        Returns:
+            The hostname or IP address of the Home Assistant instance.
+        """
+        try:
+            # Try to get the internal URL (preferred for local network devices)
+            internal_url = get_url(
+                self._hass,
+                allow_internal=True,
+                allow_external=False,
+                allow_cloud=False,
+                allow_ip=True,
+            )
+            parsed = urlparse(internal_url)
+            return parsed.hostname or "127.0.0.1"
+        except NoURLAvailableError:
+            _LOGGER.warning(
+                "Could not determine Home Assistant internal URL, "
+                "using localhost - this may not work for external devices"
+            )
+            return "127.0.0.1"
+
     async def async_start(self) -> None:
         """Start the helper and begin the cleanup task.
 
@@ -130,7 +159,9 @@ class Go2rtcHelper:
         # Add stream to go2rtc
         try:
             await self._add_stream(stream_name, source_url)
-            rtsp_url = f"rtsp://127.0.0.1:{GO2RTC_RTSP_PORT}/{stream_name}"
+            # Use HA's actual host address so ZowieBox can connect over network
+            ha_host = self._get_ha_host()
+            rtsp_url = f"rtsp://{ha_host}:{GO2RTC_RTSP_PORT}/{stream_name}"
 
             self._streams[stream_name] = ManagedStream(
                 name=stream_name,
@@ -208,7 +239,7 @@ class Go2rtcHelper:
         try:
             async with self._session.delete(
                 url,
-                params={"name": name},
+                params={"src": name},
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as resp:
                 # 404 is acceptable (stream may not exist)

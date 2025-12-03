@@ -528,9 +528,8 @@ class ZowietekMediaPlayer(ZowietekEntity, MediaPlayerEntity):
             return 2
         if url_lower.startswith("srt://"):
             return 3
-        if url_lower.startswith(("http://", "https://")):
-            return 4
-        # Default to RTSP
+        # Default to RTSP (HTTP/HTTPS URLs are converted to RTSP via go2rtc
+        # before reaching this method, so they will also return 1)
         return 1
 
     async def async_turn_off(self) -> None:

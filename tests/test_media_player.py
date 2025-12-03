@@ -1592,47 +1592,75 @@ class TestMediaPlayerPlayMediaStreamTypes:
         call_args = mock_zowietek_client.async_add_decoding_url.call_args
         assert call_args[1]["streamtype"] == 3  # SRT
 
-    async def test_play_media_detects_http_stream(
+    async def test_play_media_http_stream_with_go2rtc_converts_to_rtsp(
         self,
         hass: HomeAssistant,
         mock_config_entry: MockConfigEntry,
         mock_zowietek_client: MagicMock,
     ) -> None:
-        """Test play_media correctly detects HTTP stream type."""
+        """Test play_media converts HTTP stream to RTSP via go2rtc."""
+        from unittest.mock import AsyncMock, MagicMock
+
         from custom_components.zowietek.media_player import ZowietekMediaPlayer
 
         await _setup_integration(hass, mock_config_entry)
 
         coordinator = mock_config_entry.runtime_data
+
+        # Set up go2rtc mock that converts HTTP to RTSP
+        mock_helper = MagicMock()
+        mock_helper.is_available = True
+        mock_helper.async_convert_stream = AsyncMock(
+            return_value="rtsp://localhost:8554/stream_abc123"
+        )
+        coordinator.go2rtc_helper = mock_helper
+        coordinator.go2rtc_enabled = True
+
         media_player = ZowietekMediaPlayer(coordinator)
 
         await media_player.async_play_media(
             media_type="url", media_id="http://example.com/stream.m3u8"
         )
 
+        # Verify the converted RTSP URL was used
         call_args = mock_zowietek_client.async_add_decoding_url.call_args
-        assert call_args[1]["streamtype"] == 4  # HTTP
+        assert call_args[1]["url"] == "rtsp://localhost:8554/stream_abc123"
+        assert call_args[1]["streamtype"] == 1  # RTSP
 
-    async def test_play_media_detects_https_stream(
+    async def test_play_media_https_stream_with_go2rtc_converts_to_rtsp(
         self,
         hass: HomeAssistant,
         mock_config_entry: MockConfigEntry,
         mock_zowietek_client: MagicMock,
     ) -> None:
-        """Test play_media correctly detects HTTPS stream type."""
+        """Test play_media converts HTTPS stream to RTSP via go2rtc."""
+        from unittest.mock import AsyncMock, MagicMock
+
         from custom_components.zowietek.media_player import ZowietekMediaPlayer
 
         await _setup_integration(hass, mock_config_entry)
 
         coordinator = mock_config_entry.runtime_data
+
+        # Set up go2rtc mock that converts HTTPS to RTSP
+        mock_helper = MagicMock()
+        mock_helper.is_available = True
+        mock_helper.async_convert_stream = AsyncMock(
+            return_value="rtsp://localhost:8554/stream_def456"
+        )
+        coordinator.go2rtc_helper = mock_helper
+        coordinator.go2rtc_enabled = True
+
         media_player = ZowietekMediaPlayer(coordinator)
 
         await media_player.async_play_media(
             media_type="url", media_id="https://example.com/stream.m3u8"
         )
 
+        # Verify the converted RTSP URL was used
         call_args = mock_zowietek_client.async_add_decoding_url.call_args
-        assert call_args[1]["streamtype"] == 4  # HTTP/HTTPS
+        assert call_args[1]["url"] == "rtsp://localhost:8554/stream_def456"
+        assert call_args[1]["streamtype"] == 1  # RTSP
 
 
 class TestMediaPlayerTurnOn:
@@ -1704,6 +1732,115 @@ class TestMediaPlayerTurnOn:
 
 class TestMediaPlayerGo2rtcConversion:
     """Tests for go2rtc stream conversion in media player."""
+
+    async def test_is_go2rtc_available_returns_true_when_enabled(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test _is_go2rtc_available returns True when go2rtc is enabled and available."""
+        from custom_components.zowietek.media_player import ZowietekMediaPlayer
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+
+        # Set up go2rtc as available
+        mock_helper = MagicMock()
+        mock_helper.is_available = True
+        coordinator.go2rtc_helper = mock_helper
+        coordinator.go2rtc_enabled = True
+
+        media_player = ZowietekMediaPlayer(coordinator)
+
+        assert media_player._is_go2rtc_available() is True
+
+    async def test_is_go2rtc_available_returns_false_when_disabled(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test _is_go2rtc_available returns False when go2rtc is disabled."""
+        from custom_components.zowietek.media_player import ZowietekMediaPlayer
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+
+        # go2rtc helper exists but is disabled
+        mock_helper = MagicMock()
+        coordinator.go2rtc_helper = mock_helper
+        coordinator.go2rtc_enabled = False
+
+        media_player = ZowietekMediaPlayer(coordinator)
+
+        assert media_player._is_go2rtc_available() is False
+
+    async def test_is_go2rtc_available_returns_false_when_helper_missing(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test _is_go2rtc_available returns False when helper is None."""
+        from custom_components.zowietek.media_player import ZowietekMediaPlayer
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+
+        # go2rtc enabled but helper is None
+        coordinator.go2rtc_helper = None
+        coordinator.go2rtc_enabled = True
+
+        media_player = ZowietekMediaPlayer(coordinator)
+
+        assert media_player._is_go2rtc_available() is False
+
+    async def test_get_go2rtc_helper_returns_helper_when_available(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test _get_go2rtc_helper returns the helper when available."""
+        from custom_components.zowietek.media_player import ZowietekMediaPlayer
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+
+        # Set up go2rtc as available
+        mock_helper = MagicMock()
+        coordinator.go2rtc_helper = mock_helper
+        coordinator.go2rtc_enabled = True
+
+        media_player = ZowietekMediaPlayer(coordinator)
+
+        assert media_player._get_go2rtc_helper() is mock_helper
+
+    async def test_get_go2rtc_helper_returns_none_when_unavailable(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test _get_go2rtc_helper returns None when go2rtc is unavailable."""
+        from custom_components.zowietek.media_player import ZowietekMediaPlayer
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+
+        # go2rtc is not available
+        coordinator.go2rtc_helper = None
+        coordinator.go2rtc_enabled = False
+
+        media_player = ZowietekMediaPlayer(coordinator)
+
+        assert media_player._get_go2rtc_helper() is None
 
     async def test_needs_go2rtc_conversion_returns_false_for_rtsp(
         self,
@@ -1966,13 +2103,13 @@ class TestMediaPlayerGo2rtcConversion:
         call_args = mock_zowietek_client.async_add_decoding_url.call_args
         assert call_args[1]["url"] == "rtsp://camera.local/stream"
 
-    async def test_play_media_fallback_when_go2rtc_unavailable(
+    async def test_play_media_native_protocol_when_go2rtc_unavailable(
         self,
         hass: HomeAssistant,
         mock_config_entry: MockConfigEntry,
         mock_zowietek_client: MagicMock,
     ) -> None:
-        """Test play_media falls back to direct play when go2rtc unavailable."""
+        """Test play_media works for native protocols when go2rtc unavailable."""
         from custom_components.zowietek.media_player import ZowietekMediaPlayer
 
         await _setup_integration(hass, mock_config_entry)
@@ -1985,23 +2122,23 @@ class TestMediaPlayerGo2rtcConversion:
 
         media_player = ZowietekMediaPlayer(coordinator)
 
-        # Should attempt direct play for HLS stream
+        # Native RTSP streams should work without go2rtc
         await media_player.async_play_media(
             media_type="url",
-            media_id="http://example.com/stream.m3u8",
+            media_id="rtsp://camera.local/stream",
         )
 
-        # Verify direct play was attempted
+        # Verify direct play was attempted with RTSP URL
         call_args = mock_zowietek_client.async_add_decoding_url.call_args
-        assert call_args[1]["url"] == "http://example.com/stream.m3u8"
+        assert call_args[1]["url"] == "rtsp://camera.local/stream"
 
-    async def test_play_media_fallback_when_go2rtc_disabled(
+    async def test_play_media_native_protocol_when_go2rtc_disabled(
         self,
         hass: HomeAssistant,
         mock_config_entry: MockConfigEntry,
         mock_zowietek_client: MagicMock,
     ) -> None:
-        """Test play_media falls back when go2rtc is disabled in options."""
+        """Test play_media works for native protocols when go2rtc is disabled."""
         from custom_components.zowietek.media_player import ZowietekMediaPlayer
 
         await _setup_integration(hass, mock_config_entry)
@@ -2018,17 +2155,18 @@ class TestMediaPlayerGo2rtcConversion:
 
         media_player = ZowietekMediaPlayer(coordinator)
 
+        # Native SRT streams should work without go2rtc
         await media_player.async_play_media(
             media_type="url",
-            media_id="http://example.com/stream.m3u8",
+            media_id="srt://192.168.1.100:9000",
         )
 
-        # Verify go2rtc conversion was NOT called
+        # Verify go2rtc conversion was NOT called (not needed for native protocols)
         mock_helper.async_convert_stream.assert_not_called()
 
-        # Verify direct play was attempted
+        # Verify direct play was attempted with SRT URL
         call_args = mock_zowietek_client.async_add_decoding_url.call_args
-        assert call_args[1]["url"] == "http://example.com/stream.m3u8"
+        assert call_args[1]["url"] == "srt://192.168.1.100:9000"
 
     async def test_play_media_camera_without_go2rtc_raises_error(
         self,
@@ -2059,13 +2197,15 @@ class TestMediaPlayerGo2rtcConversion:
 
         assert "go2rtc" in str(exc_info.value).lower()
 
-    async def test_play_media_conversion_failure_falls_back_to_direct(
+    async def test_play_media_conversion_failure_raises_error(
         self,
         hass: HomeAssistant,
         mock_config_entry: MockConfigEntry,
         mock_zowietek_client: MagicMock,
     ) -> None:
-        """Test play_media falls back to direct play if conversion fails."""
+        """Test play_media raises error when go2rtc conversion fails for HTTP URL."""
+        from homeassistant.exceptions import HomeAssistantError
+
         from custom_components.zowietek.media_player import ZowietekMediaPlayer
 
         await _setup_integration(hass, mock_config_entry)
@@ -2082,18 +2222,51 @@ class TestMediaPlayerGo2rtcConversion:
 
         media_player = ZowietekMediaPlayer(coordinator)
 
-        # Should fall back to direct play
-        await media_player.async_play_media(
-            media_type="url",
-            media_id="http://example.com/stream.m3u8",
-        )
+        # Should raise error since ZowieBox cannot play HTTP URLs directly
+        with pytest.raises(HomeAssistantError) as exc_info:
+            await media_player.async_play_media(
+                media_type="url",
+                media_id="http://example.com/stream.m3u8",
+            )
 
         # Verify conversion was attempted
         mock_helper.async_convert_stream.assert_called_once()
 
-        # Verify fallback to direct play
-        call_args = mock_zowietek_client.async_add_decoding_url.call_args
-        assert call_args[1]["url"] == "http://example.com/stream.m3u8"
+        # Verify error message is helpful
+        assert "go2rtc conversion failed" in str(exc_info.value)
+        assert "http://example.com/stream.m3u8" in str(exc_info.value)
+
+    async def test_play_media_http_url_without_go2rtc_raises_error(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        mock_zowietek_client: MagicMock,
+    ) -> None:
+        """Test play_media raises error when go2rtc is not available for HTTP URL."""
+        from homeassistant.exceptions import HomeAssistantError
+
+        from custom_components.zowietek.media_player import ZowietekMediaPlayer
+
+        await _setup_integration(hass, mock_config_entry)
+
+        coordinator = mock_config_entry.runtime_data
+
+        # go2rtc is not enabled
+        coordinator.go2rtc_helper = None
+        coordinator.go2rtc_enabled = False
+
+        media_player = ZowietekMediaPlayer(coordinator)
+
+        # Should raise error since ZowieBox cannot play HTTP URLs directly
+        with pytest.raises(HomeAssistantError) as exc_info:
+            await media_player.async_play_media(
+                media_type="url",
+                media_id="http://example.com/stream.ts",
+            )
+
+        # Verify error message is helpful
+        assert "go2rtc is required" in str(exc_info.value)
+        assert "http://example.com/stream.ts" in str(exc_info.value)
 
     async def test_needs_go2rtc_conversion_returns_true_for_unknown_protocol(
         self,
